@@ -12,14 +12,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.database import get_conn
 from api.routers import signals, stats, settings, chart, access, stars, admin
 from api.routers.signals import _row_to_signal
-from api.routers.access import _poll_tron_transactions
+from api.routers.access import _poll_tron_transactions, _send_expiry_reminders
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_poll_tron_transactions())
+    t1 = asyncio.create_task(_poll_tron_transactions())
+    t2 = asyncio.create_task(_send_expiry_reminders())
     yield
-    task.cancel()
+    t1.cancel()
+    t2.cancel()
 
 
 app = FastAPI(title="Crypto Signals API", lifespan=lifespan)

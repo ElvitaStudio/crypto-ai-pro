@@ -3,21 +3,25 @@ import type { Page } from './types'
 import { Dashboard } from './pages/Dashboard'
 import { Stats } from './pages/Stats'
 import { Settings } from './pages/Settings'
+import { Pro } from './pages/Pro'
 import { Paywall, TrialBanner } from './components/Paywall'
+import { ExpiryPopup } from './components/ExpiryPopup'
 import { useAccess } from './hooks/useAccess'
 
-const NAV: { id: Page; label: string; icon: string }[] = [
-  { id: 'feed', label: 'Сигналы', icon: '📡' },
-  { id: 'stats', label: 'Статистика', icon: '📈' },
-  { id: 'settings', label: 'Настройки', icon: '⚙️' },
+const NAV: { id: Page; label: string; icon: string; pro?: boolean }[] = [
+  { id: 'feed',     label: 'Сигналы',    icon: '📡'  },
+  { id: 'stats',    label: 'Статистика', icon: '📈'  },
+  { id: 'pro',      label: 'Pro',        icon: '💎', pro: true },
+  { id: 'settings', label: 'Настройки',  icon: '⚙️'  },
 ]
 
 export function App() {
   const [page, setPage] = useState<Page>('feed')
+  const [showPaywall, setShowPaywall] = useState(false)
   const access = useAccess()
 
   // Block access when expired
-  if (access.status === 'expired') {
+  if (access.status === 'expired' || showPaywall) {
     return <Paywall access={access} />
   }
 
@@ -27,23 +31,53 @@ export function App() {
       {access.status === 'trial' && access.hoursLeft !== null && (
         <TrialBanner hoursLeft={access.hoursLeft} />
       )}
+
+      {/* Expiry popup — last 24h, shown every hour */}
+      {access.status === 'active' &&
+        access.hoursUntilExpiry !== null &&
+        access.hoursUntilExpiry <= 24 && (
+        <ExpiryPopup
+          hoursUntilExpiry={access.hoursUntilExpiry}
+          expiresAt={access.expiresAt}
+          onRenew={() => setShowPaywall(true)}
+        />
+      )}
+
       <div style={styles.content}>
-        {page === 'feed' && <Dashboard />}
-        {page === 'stats' && <Stats />}
+        {page === 'feed'     && <Dashboard />}
+        {page === 'stats'    && <Stats />}
         {page === 'settings' && <Settings />}
+        {page === 'pro'      && (
+          <Pro access={access} onUpgrade={() => setShowPaywall(true)} />
+        )}
       </div>
 
       <nav style={styles.nav}>
-        {NAV.map((item) => (
-          <button
-            key={item.id}
-            style={{ ...styles.navBtn, ...(page === item.id ? styles.navActive : {}) }}
-            onClick={() => setPage(item.id)}
-          >
-            <span style={styles.navIcon}>{item.icon}</span>
-            <span style={styles.navLabel}>{item.label}</span>
-          </button>
-        ))}
+        {NAV.map((item) => {
+          const isActive = page === item.id
+          return (
+            <button
+              key={item.id}
+              style={{ ...styles.navBtn, ...(isActive ? styles.navActive : {}) }}
+              onClick={() => setPage(item.id)}
+            >
+              {item.pro ? (
+                <span style={{ ...styles.navIcon, ...(isActive ? styles.proIconActive : styles.proIcon) }}>
+                  {item.icon}
+                </span>
+              ) : (
+                <span style={styles.navIcon}>{item.icon}</span>
+              )}
+              {item.pro ? (
+                <span style={{ ...styles.navLabel, ...(isActive ? styles.proLabelActive : styles.proLabel) }}>
+                  {item.label}
+                </span>
+              ) : (
+                <span style={styles.navLabel}>{item.label}</span>
+              )}
+            </button>
+          )
+        })}
       </nav>
     </div>
   )
@@ -67,7 +101,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 2, padding: '10px 0', background: 'none', border: 'none',
     color: 'rgba(255,255,255,0.4)', cursor: 'pointer', transition: 'color 0.15s',
   },
-  navActive: { color: '#fff' },
-  navIcon: { fontSize: 20 },
-  navLabel: { fontSize: 11 },
+  navActive:      { color: '#fff' },
+  navIcon:        { fontSize: 20 },
+  navLabel:       { fontSize: 11 },
+  proIcon:        { fontSize: 20, filter: 'drop-shadow(0 0 4px rgba(167,139,250,0.6))' },
+  proIconActive:  { fontSize: 20, filter: 'drop-shadow(0 0 8px rgba(167,139,250,1))' },
+  proLabel:       { fontSize: 11, background: 'linear-gradient(90deg,#a78bfa,#60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', fontWeight: 700 },
+  proLabelActive: { fontSize: 11, background: 'linear-gradient(90deg,#c4b5fd,#93c5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', fontWeight: 700 },
 }

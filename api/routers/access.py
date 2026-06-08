@@ -61,11 +61,12 @@ def _init_tables() -> None:
     with get_conn() as con:
         con.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                telegram_id   INTEGER PRIMARY KEY,
-                username      TEXT,
-                trial_start   REAL,
-                paid_until    REAL,
-                created_at    REAL DEFAULT (unixepoch())
+                telegram_id        INTEGER PRIMARY KEY,
+                username           TEXT,
+                trial_start        REAL,
+                paid_until         REAL,
+                last_reminder_sent REAL,   -- unix ts of last expiry reminder
+                created_at         REAL DEFAULT (unixepoch())
             )
         """)
         con.execute("""
@@ -146,9 +147,11 @@ def _access_status(user: dict) -> dict:
     now = _now()
 
     if user.get("paid_until") and user["paid_until"] > now:
+        hours_until_expiry = (user["paid_until"] - now) / 3600
         return {
             "status": "active",
             "hours_left": None,
+            "hours_until_expiry": round(hours_until_expiry, 1),
             "expires_at": datetime.fromtimestamp(
                 user["paid_until"], tz=timezone.utc
             ).isoformat(),
@@ -161,12 +164,13 @@ def _access_status(user: dict) -> dict:
             return {
                 "status": "trial",
                 "hours_left": round(hours_left, 1),
+                "hours_until_expiry": None,
                 "expires_at": datetime.fromtimestamp(
                     trial_end, tz=timezone.utc
                 ).isoformat(),
             }
 
-    return {"status": "expired", "hours_left": 0, "expires_at": None}
+    return {"status": "expired", "hours_left": 0, "hours_until_expiry": None, "expires_at": None}
 
 
 def _suffix(telegram_id: int) -> float:
@@ -245,6 +249,99 @@ def payment_info(
         "days": days,
         "price": price,
     }
+
+
+# ── Expiry reminder background task ──────────────────────────────────────────
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+BOT_API   = "https://api.telegram.org"
+
+
+async def _send_bot_message(chat_id: int, text: str) -> None:
+    if not BOT_TOKEN:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{BOT_API}/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            )
+    except Exception as e:
+        logger.error("Bot sendMessage error for %s: %s", chat_id, e)
+
+
+async def _send_expiry_reminders() -> None:
+    """
+    Runs every hour. Sends renewal reminders:
+      - 3 days before expiry: once per day
+      - 2 days before expiry: once per day
+      - 1 day before expiry:  once per day
+    """
+    logger.info("Starting expiry reminder task")
+    while True:
+        try:
+            now = _now()
+            three_days = 3 * 86400
+
+            with get_conn() as con:
+                rows = con.execute("""
+                    SELECT telegram_id, username, paid_until, last_reminder_sent
+                    FROM users
+                    WHERE paid_until IS NOT NULL
+                      AND paid_until > ?
+                      AND paid_until < ?
+                """, (now, now + three_days)).fetchall()
+
+            for row in rows:
+                tg_id      = row["telegram_id"]
+                paid_until = row["paid_until"]
+                last_sent  = row["last_reminder_sent"] or 0
+                hours_left = (paid_until - now) / 3600
+                days_left  = int(hours_left / 24) + 1
+
+                # Send at most once per 23 hours
+                if now - last_sent < 23 * 3600:
+                    continue
+
+                expiry_str = datetime.fromtimestamp(paid_until, tz=timezone.utc).strftime("%d.%m.%Y")
+
+                if days_left <= 1:
+                    msg = (
+                        f"⚠️ <b>Подписка MarketPulse Pro истекает сегодня!</b>\n\n"
+                        f"Осталось менее 24 часов (до {expiry_str}).\n\n"
+                        f"Продлите подписку чтобы не потерять доступ к сигналам и AI-анализу.\n\n"
+                        f"👉 Откройте приложение → раздел <b>Pro</b>"
+                    )
+                elif days_left <= 2:
+                    msg = (
+                        f"⏰ <b>Подписка MarketPulse Pro истекает через 2 дня</b>\n\n"
+                        f"Дата окончания: {expiry_str}\n\n"
+                        f"Продлите сейчас и не прерывайте торговый поток.\n\n"
+                        f"👉 Откройте приложение → раздел <b>Pro</b>"
+                    )
+                else:
+                    msg = (
+                        f"📅 <b>Напоминание о подписке MarketPulse Pro</b>\n\n"
+                        f"До окончания подписки осталось <b>{days_left} дня</b> (до {expiry_str}).\n\n"
+                        f"Продлите подписку заранее и продолжайте получать сигналы без перерыва.\n\n"
+                        f"👉 Откройте приложение → раздел <b>Pro</b>"
+                    )
+
+                await _send_bot_message(tg_id, msg)
+
+                with get_conn() as con:
+                    con.execute(
+                        "UPDATE users SET last_reminder_sent = ? WHERE telegram_id = ?",
+                        (now, tg_id),
+                    )
+                    con.commit()
+
+                logger.info("Reminder sent to telegram_id=%s days_left=%s", tg_id, days_left)
+
+        except Exception as e:
+            logger.error("Expiry reminder task error: %s", e)
+
+        await asyncio.sleep(3600)  # check every hour
 
 
 # ── TronGrid payment polling ──────────────────────────────────────────────────

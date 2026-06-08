@@ -14,7 +14,7 @@ export function Dashboard() {
   return (
     <div>
       <div style={styles.header}>
-        <span style={styles.title}>Сигналы</span>
+        <span className="logo-animated" style={styles.title}>MarketPulse Pro</span>
         <span style={{ ...styles.dot, background: connected ? '#26a17b' : '#e74c3c' }} />
         <span style={styles.dotLabel}>{connected ? 'Live' : 'Off'}</span>
       </div>
@@ -44,7 +44,7 @@ const styles: Record<string, React.CSSProperties> = {
   header: {
     display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14,
   },
-  title: { fontSize: 20, fontWeight: 700, flex: 1 },
+  title: { fontSize: 22, fontWeight: 800, flex: 1, letterSpacing: '-0.5px' },
   dot: { width: 8, height: 8, borderRadius: '50%' },
   dotLabel: { fontSize: 12, opacity: 0.6 },
   filters: { display: 'flex', gap: 6, marginBottom: 14 },
