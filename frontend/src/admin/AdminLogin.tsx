@@ -35,7 +35,7 @@ export function AdminLogin({ onLogin }: Props) {
       <div style={s.card}>
         <div style={s.logo}>⚙️</div>
         <h2 style={s.title}>Admin Panel</h2>
-        <p style={s.sub}>Crypto AI Pro</p>
+        <p style={s.sub}>MarketPulse Pro</p>
         <form onSubmit={submit} style={s.form}>
           <div style={s.inputWrap}>
             <input

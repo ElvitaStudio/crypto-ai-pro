@@ -125,14 +125,7 @@ function SignalsModal({ onClose, initialFilter = 'ALL' }: { onClose: () => void;
 
   const filtered = filter === 'ALL' ? signals : signals.filter(s => s.status === filter)
 
-  const counts = {
-    ALL:  signals.length,
-    OPEN: signals.filter(s => s.status === 'OPEN').length,
-    WIN:  signals.filter(s => s.status === 'WIN').length,
-    LOSS: signals.filter(s => s.status === 'LOSS').length,
-  }
-
-  return (
+return (
     <>
       <div style={st.modalOverlay} onClick={onClose}>
         <div style={st.modal} onClick={e => e.stopPropagation()}>
@@ -140,26 +133,13 @@ function SignalsModal({ onClose, initialFilter = 'ALL' }: { onClose: () => void;
           <div style={st.modalHeader}>
             <div>
               <div style={st.modalTitle}>
-                {filter === 'WIN' ? '🟢 Тейк-профиты' : filter === 'LOSS' ? '🔴 Стоп-лоссы' : '📋 История сигналов'}
+                {filter === 'WIN' ? '🟢 Тейк' : filter === 'LOSS' ? '🔴 Стоп-лоссы' : '📋 История сигналов'}
               </div>
               <div style={st.modalSub}>За последние 3 суток · {filtered.length} сигналов</div>
             </div>
             <button style={st.closeBtn} onClick={onClose}>✕</button>
           </div>
 
-          {/* Filter tabs */}
-          <div style={st.filterRow}>
-            {(['ALL', 'OPEN', 'WIN', 'LOSS'] as const).map(f => (
-              <button
-                key={f}
-                style={{ ...st.filterBtn, ...(filter === f ? st.filterActive : {}) }}
-                onClick={() => setFilter(f)}
-              >
-                {f === 'ALL' ? 'Все' : f === 'OPEN' ? '🔵 Открытые' : f === 'WIN' ? '🟢 TP' : '🔴 SL'}
-                <span style={st.filterCount}>{counts[f]}</span>
-              </button>
-            ))}
-          </div>
 
           {/* List */}
           <div style={st.list}>

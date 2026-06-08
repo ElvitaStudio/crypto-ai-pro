@@ -1,4 +1,4 @@
-# 📊 Crypto AI Pro — Telegram Mini App
+# 📊 MarketPulse Pro — Telegram Mini App
 
 > AI-powered crypto trading signals with live charts, volume analysis, and smart filtering — delivered as a Telegram Mini App with paid access via USDT or Telegram Stars.
 

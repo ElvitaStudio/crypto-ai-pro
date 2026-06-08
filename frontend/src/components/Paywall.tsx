@@ -119,7 +119,7 @@ export function Paywall({ access }: Props) {
           {/* Header */}
           <div style={s.payHeader}>
             <button style={s.backBtn} onClick={() => setView('plans')}>← Назад</button>
-            <span style={s.payTitle}>⚡ Crypto AI Pro</span>
+            <span style={s.payTitle}>⚡ MarketPulse Pro</span>
           </div>
 
           {/* Method tabs */}
@@ -227,8 +227,8 @@ export function Paywall({ access }: Props) {
         <div style={s.logoRow}>
           <span style={s.logoIcon}>📊</span>
           <div>
-            <div style={s.logoTitle}>AI CryptoAnalyze</div>
-            <div style={s.logoSub}>Crypto AI Pro</div>
+            <div style={s.logoTitle}>MarketPulse Pro</div>
+            <div style={s.logoSub}>MarketPulse Pro</div>
           </div>
         </div>
 
