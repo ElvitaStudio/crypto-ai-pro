@@ -3,6 +3,8 @@ import asyncio
 import json
 import time
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware

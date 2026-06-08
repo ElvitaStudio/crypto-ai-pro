@@ -1,0 +1,131 @@
+# -*- coding: utf-8 -*-
+"""
+Central configuration for all bots.
+Each strategy has its own section; shared settings are at the top.
+"""
+
+# ============================================================
+#  AI COUNCIL  (OpenRouter)
+# ============================================================
+import os
+
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Models that vote on each signal. Majority (>50%) must approve.
+AI_COUNCIL_MODELS = [
+    "anthropic/claude-haiku-4-5",        # fast, cheap
+    "openai/gpt-4o-mini",                 # fast, cheap
+    "google/gemini-flash-2.0",            # fast, cheap
+]
+
+AI_COUNCIL_ENABLED = True   # set False to disable and send all signals
+AI_COUNCIL_TIMEOUT_SEC = 10 # per model request timeout
+
+# ============================================================
+#  SHARED EXCHANGE
+# ============================================================
+EXCHANGE_TYPE = "future"          # Binance Futures
+RATE_LIMIT = True
+
+# ============================================================
+#  TELEGRAM BOTS
+#  Map strategy name → (token, signal_channel, results_channel)
+#  results_channel can be None if strategy doesn't track trades
+# ============================================================
+TELEGRAM = {
+    "volume_level": {
+        "token": "7550542378:AAERLC0CFYXYq2ivK1yPuMktFTtxA3AO5Zg",
+        "signal_channel": "-1003521529329",
+        "results_channel": "-1003439293125",
+    },
+    "multi": {
+        "token": "8433497142:AAFFdThNXlzBDF5rlGR89X35eL3FCA4LKpE",
+        "signal_channel": "-1002734712902",
+        "results_channel": None,
+    },
+    "vwap_channel": {
+        "token": "7852773083:AAEAuQQQxIfurVjgQZdKTvNmgIDw_visFG8",
+        "signal_channel": "-1002455674147",
+        "results_channel": None,
+    },
+    "fractal": {
+        "token": "7615835464:AAEQIMdf3mD9ym0TyO3ZtZ8p1UD8VQrFSYs",
+        "signal_channel": "-1002728849341",
+        "results_channel": None,
+    },
+}
+
+# ============================================================
+#  SHARED SCANNER
+# ============================================================
+TOP_COINS_REFRESH_INTERVAL = 15   # iterations between coin list refresh
+
+# ============================================================
+#  STRATEGY: VOLUME + LEVEL  (from bot.py)
+# ============================================================
+VOLUME_LEVEL = {
+    "timeframe": "5m",
+    "chart_timeframe": "15m",
+    "limit": 50,
+    "chart_limit": 100,
+    "coins_to_scan": 40,
+    "vol_multiplier": 5.0,
+    "price_change_perc": 1.5,
+    "level_distance_perc": 1.0,
+    "scan_interval_sec": 120,
+    "db_file": "data/training_volume.csv",
+    "trades_file": "data/trades_volume.json",
+    # AI filter thresholds
+    "long_rsi_max": 55,
+    "long_adx_max": 30,
+    "long_vol_ratio_min": 1.5,
+    "long_vol_ratio_max": 4.0,
+    "short_rsi_min": 30,
+    "short_rsi_max": 60,
+    "short_adx_max": 40,
+    "short_vol_ratio_min": 2.0,
+    "short_vol_ratio_max": 5.0,
+}
+
+# ============================================================
+#  STRATEGY: MULTI (Sniper / Trend / SFP)  (from multibot.py)
+# ============================================================
+MULTI = {
+    "timeframe": "15m",
+    "chart_timeframe": "1h",
+    "limit": 300,
+    "coins_to_scan": 80,
+    "scan_interval_sec": 180,
+    "risk_min_perc": 0.2,
+    "risk_max_perc": 3.0,
+    "rsi_overbought": 70,
+    "rsi_oversold": 30,
+    "adx_trend_min": 25,
+}
+
+# ============================================================
+#  STRATEGY: VWAP CHANNEL  (from nexusbot.py)
+# ============================================================
+VWAP_CHANNEL = {
+    "timeframe": "15m",
+    "limit": 100,
+    "coins_to_scan": 60,
+    "std_dev_mult": 2.0,
+    "scan_interval_sec": 120,
+    "min_rr": 1.0,
+}
+
+# ============================================================
+#  STRATEGY: FRACTAL LEVELS  (from titanbot.py)
+# ============================================================
+FRACTAL = {
+    "timeframe": "15m",
+    "limit": 200,
+    "coins_to_scan": 50,
+    "fractal_window": 5,
+    "level_proximity_perc": 0.8,
+    "scan_interval_sec": 180,
+    "sl_buffer_perc": 0.5,
+    "rr_ratio": 3.0,
+}

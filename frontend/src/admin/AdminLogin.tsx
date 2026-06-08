@@ -6,6 +6,7 @@ interface Props { onLogin: (token: string) => void }
 
 export function AdminLogin({ onLogin }: Props) {
   const [password, setPassword] = useState('')
+  const [show, setShow]         = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
 
@@ -36,14 +37,19 @@ export function AdminLogin({ onLogin }: Props) {
         <h2 style={s.title}>Admin Panel</h2>
         <p style={s.sub}>Crypto AI Pro</p>
         <form onSubmit={submit} style={s.form}>
-          <input
-            style={s.input}
-            type="password"
-            placeholder="Пароль"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            autoFocus
-          />
+          <div style={s.inputWrap}>
+            <input
+              style={s.input}
+              type={show ? 'text' : 'password'}
+              placeholder="Пароль"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoFocus
+            />
+            <button type="button" style={s.eyeBtn} onClick={() => setShow(v => !v)}>
+              {show ? '🙈' : '👁'}
+            </button>
+          </div>
           {error && <div style={s.error}>{error}</div>}
           <button style={s.btn} disabled={loading || !password}>
             {loading ? 'Вход...' : 'Войти →'}
@@ -61,7 +67,9 @@ const s: Record<string, React.CSSProperties> = {
   title: { margin: 0, fontSize: 22, fontWeight: 700, color: '#f0f6fc' },
   sub:   { margin: '4px 0 24px', color: '#6e7681', fontSize: 14 },
   form:  { display: 'flex', flexDirection: 'column', gap: 12 },
-  input: { padding: '12px 14px', borderRadius: 10, border: '1px solid #30363d', background: '#0d1117', color: '#f0f6fc', fontSize: 15, outline: 'none' },
+  inputWrap: { position: 'relative' as const },
+  input: { width: '100%', padding: '12px 44px 12px 14px', borderRadius: 10, border: '1px solid #30363d', background: '#0d1117', color: '#f0f6fc', fontSize: 15, outline: 'none', boxSizing: 'border-box' as const },
+  eyeBtn: { position: 'absolute' as const, right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 },
   error: { color: '#f85149', fontSize: 13 },
   btn:   { padding: '12px', borderRadius: 10, border: 'none', background: '#238636', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer' },
 }
