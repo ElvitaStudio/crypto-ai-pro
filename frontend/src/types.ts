@@ -88,4 +88,4 @@ export interface ChartData {
   val: number
 }
 
-export type Page = 'feed' | 'stats' | 'pro' | 'settings'
+export type Page = 'feed' | 'stats' | 'pro' | 'settings' | 'guide'

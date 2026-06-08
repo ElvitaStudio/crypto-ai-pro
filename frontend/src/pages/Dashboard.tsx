@@ -2,10 +2,18 @@ import { useState } from 'react'
 import { useSignalFeed } from '../hooks/useSignalFeed'
 import { SignalCard } from '../components/SignalCard'
 import { useLang } from '../i18n/LangContext'
+import type { TranslationKey } from '../i18n/translations'
 import type { AccessStatus } from '../hooks/useAccess'
 
 const FILTERS = ['ALL', 'OPEN', 'WIN', 'LOSS'] as const
 type Filter = typeof FILTERS[number]
+
+const FILTER_KEYS: Record<Filter, TranslationKey> = {
+  ALL:  'filterAll',
+  OPEN: 'filterOpen',
+  WIN:  'filterWin',
+  LOSS: 'filterLoss',
+}
 
 interface Props {
   accessStatus: AccessStatus
@@ -57,7 +65,7 @@ export function Dashboard({ accessStatus, onProClick }: Props) {
             style={{ ...styles.filterBtn, ...(filter === f ? styles.filterActive : {}) }}
             onClick={() => setFilter(f)}
           >
-            {f}
+            {t(FILTER_KEYS[f])}
           </button>
         ))}
       </div>

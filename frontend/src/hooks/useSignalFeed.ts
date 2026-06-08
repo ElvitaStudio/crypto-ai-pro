@@ -21,16 +21,24 @@ export function useSignalFeed() {
     ws.onclose = () => setConnected(false)
 
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data) as { type: 'init' | 'new'; data: Signal[] }
+      const msg = JSON.parse(e.data) as
+        | { type: 'init' | 'new'; data: Signal[] }
+        | { type: 'update'; data: Signal }
+
       if (msg.type === 'init') {
-        // WS connected — replace REST data with authoritative WS init
         setSignals(msg.data)
-      } else {
+      } else if (msg.type === 'new') {
         setSignals((prev) => {
           const existingIds = new Set(prev.map(s => s.id))
-          const newOnes = msg.data.filter(s => !existingIds.has(s.id))
+          const newOnes = (msg.data as Signal[]).filter(s => !existingIds.has(s.id))
           return [...newOnes, ...prev].slice(0, MAX_FEED)
         })
+      } else if (msg.type === 'update') {
+        // Replace the signal with updated status (TP/SL hit)
+        const updated = msg.data as Signal
+        setSignals((prev) =>
+          prev.map(s => s.id === updated.id ? updated : s)
+        )
       }
     }
 

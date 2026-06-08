@@ -56,38 +56,85 @@ class CouncilVerdict:
         return "\n".join(lines)
 
 
-_SYSTEM_PROMPT = """You are a professional crypto futures trading analyst.
-You will receive a trading signal with market data and must decide if it is worth trading.
+_SYSTEM_PROMPT = """You are a senior crypto futures trading analyst with 10+ years experience.
+You evaluate trading signals with a strict quality filter — only approve high-confidence setups.
+Reject signals when: RSI contradicts direction, trend is unclear, R:R is below 2.0, or HTF trend opposes the trade.
+
 Respond ONLY with valid JSON in this exact format:
 {
   "approved": true or false,
   "confidence": 0-100,
-  "reasoning": "one sentence explanation"
+  "reasoning": "one concise sentence explaining your decision"
 }"""
 
 
+def _fmt_features(features: dict) -> str:
+    if not features:
+        return "  (no indicator data)"
+    lines = []
+    labels = {
+        "rsi":       "RSI(14)",
+        "adx":       "ADX(14)",
+        "vol_ratio": "Volume ratio (×avg)",
+        "btc_corr":  "BTC correlation",
+        "dist_ema":  "Distance from EMA-200",
+    }
+    for k, v in features.items():
+        label = labels.get(k, k)
+        lines.append(f"  {label}: {v}")
+    return "\n".join(lines)
+
+
 def _build_user_prompt(signal: dict) -> str:
-    return f"""Trading Signal Analysis Request:
+    entry  = signal['entry']
+    sl     = signal['sl']
+    tp     = signal['tp']
+    risk   = abs(entry - sl)
+    reward = abs(tp - entry)
+    rr     = round(reward / risk, 2) if risk else 0
 
-Symbol: {signal['symbol']}
-Direction: {signal['direction']}
-Entry: {signal['entry']}
-Stop Loss: {signal['sl']}
-Take Profit: {signal['tp']}
-Strategy: {signal.get('strategy_name', 'unknown')}
+    htf_trend = signal.get("htf_trend", "unknown")
+    direction = signal['direction']
 
-Market Features:
-{json.dumps(signal.get('features', {}), indent=2)}
+    trend_note = ""
+    if htf_trend == "UP":
+        trend_note = "✅ Aligned with HTF trend" if direction == "LONG" else "⚠️ COUNTER-TREND (HTF is UP, signal is SHORT)"
+    elif htf_trend == "DOWN":
+        trend_note = "✅ Aligned with HTF trend" if direction == "SHORT" else "⚠️ COUNTER-TREND (HTF is DOWN, signal is LONG)"
+    else:
+        trend_note = "Neutral / unknown HTF trend"
 
-Signal Reasoning:
-{signal.get('reasoning', 'N/A')}
+    return f"""=== TRADING SIGNAL FOR REVIEW ===
 
-Analyze this signal considering:
-1. Risk/reward ratio
-2. Signal quality based on the features
-3. Whether the direction makes sense given RSI, ADX, volume ratio
+Symbol:    {signal['symbol']}
+Direction: {direction}
+Strategy:  {signal.get('strategy_name', 'unknown')}
 
-Should this signal be traded? Respond with JSON only."""
+Price levels:
+  Entry:      {entry}
+  Stop Loss:  {sl}  ({abs(sl - entry) / entry * 100:.2f}% risk)
+  Take Profit:{tp}  (+{abs(tp - entry) / entry * 100:.2f}% reward)
+  R:R ratio:  1:{rr}
+
+Higher timeframe trend (1h EMA-50): {htf_trend}
+Trend alignment: {trend_note}
+
+Indicator readings:
+{_fmt_features(signal.get('features', {}))}
+
+Signal reasoning from strategy:
+  {signal.get('reasoning', 'N/A')}
+
+=== YOUR TASK ===
+Decide if this signal is worth trading.
+Key checks:
+  1. Does RSI support the direction? (LONG needs RSI < 55, SHORT needs RSI > 45)
+  2. Is ADX above 20? (trend confirmation)
+  3. Is volume above normal? (vol_ratio > 1.5 preferred)
+  4. Does HTF trend align or at least not strongly oppose?
+  5. Is R:R ≥ 2.0?
+
+Be strict — only approve clear, high-quality setups. Respond with JSON only."""
 
 
 def _ask_model(model: str, prompt: str) -> ModelVote:

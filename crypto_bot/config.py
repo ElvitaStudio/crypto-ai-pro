@@ -73,19 +73,19 @@ VOLUME_LEVEL = {
     "vol_multiplier": 5.0,
     "price_change_perc": 1.5,
     "level_distance_perc": 1.0,
-    "scan_interval_sec": 120,
+    "scan_interval_sec": 1800,
     "db_file": "data/training_volume.csv",
     "trades_file": "data/trades_volume.json",
-    # AI filter thresholds
-    "long_rsi_max": 55,
-    "long_adx_max": 30,
-    "long_vol_ratio_min": 1.5,
-    "long_vol_ratio_max": 4.0,
-    "short_rsi_min": 30,
-    "short_rsi_max": 60,
+    # AI filter thresholds (tightened for quality)
+    "long_rsi_max": 45,        # was 55 — don't buy overbought
+    "long_adx_max": 35,        # was 30 — allow stronger trends
+    "long_vol_ratio_min": 2.0, # was 1.5 — require stronger volume anomaly
+    "long_vol_ratio_max": 6.0,
+    "short_rsi_min": 55,       # was 30 — don't short oversold
+    "short_rsi_max": 75,       # was 60
     "short_adx_max": 40,
     "short_vol_ratio_min": 2.0,
-    "short_vol_ratio_max": 5.0,
+    "short_vol_ratio_max": 6.0,
 }
 
 # ============================================================
@@ -96,12 +96,12 @@ MULTI = {
     "chart_timeframe": "1h",
     "limit": 300,
     "coins_to_scan": 80,
-    "scan_interval_sec": 180,
+    "scan_interval_sec": 1800,
     "risk_min_perc": 0.2,
     "risk_max_perc": 3.0,
-    "rsi_overbought": 70,
-    "rsi_oversold": 30,
-    "adx_trend_min": 25,
+    "rsi_overbought": 65,   # was 70 — earlier reversal signal
+    "rsi_oversold": 35,     # was 30 — earlier bounce signal
+    "adx_trend_min": 30,    # was 25 — require confirmed trend
 }
 
 # ============================================================
@@ -112,7 +112,7 @@ VWAP_CHANNEL = {
     "limit": 100,
     "coins_to_scan": 60,
     "std_dev_mult": 2.0,
-    "scan_interval_sec": 120,
+    "scan_interval_sec": 1800,
     "min_rr": 1.0,
 }
 
@@ -125,7 +125,7 @@ FRACTAL = {
     "coins_to_scan": 50,
     "fractal_window": 5,
     "level_proximity_perc": 0.8,
-    "scan_interval_sec": 180,
+    "scan_interval_sec": 1800,
     "sl_buffer_perc": 0.5,
     "rr_ratio": 3.0,
 }

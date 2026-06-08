@@ -42,9 +42,10 @@ interface Props {
   poc: number
   vah: number
   val: number
+  visible?: boolean
 }
 
-export function HeatmapChart({ candles, poc, vah, val }: Props) {
+export function HeatmapChart({ candles, poc, vah, val, visible = true }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -163,13 +164,23 @@ export function HeatmapChart({ candles, poc, vah, val }: Props) {
     ctx.fillText('Low',  legendX - 2, legendY + legendH)
     } // end draw()
 
-    // Draw immediately (if already visible) or wait via ResizeObserver
+    // Attempt immediate draw. If canvas is still 0-sized (parent display:none),
+    // the ResizeObserver will fire when the container becomes visible.
     draw()
-    const ro = new ResizeObserver(() => { draw(); ro.disconnect() })
-    ro.observe(canvas)
-    return () => ro.disconnect()
 
-  }, [candles, poc, vah, val])
+    // Force a draw on the next animation frame — handles the case where the
+    // parent transitions from display:none to display:flex in the same render.
+    const raf = requestAnimationFrame(draw)
+
+    // Keep observer alive so repeated show/hide cycles all work correctly.
+    const ro = new ResizeObserver(() => draw())
+    ro.observe(canvas)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [candles, poc, vah, val, visible])
 
   return (
     <canvas

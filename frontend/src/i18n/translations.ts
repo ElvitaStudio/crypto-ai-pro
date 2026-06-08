@@ -7,21 +7,23 @@ export const T = {
     navStats:      'Статистика',
     navPro:        'Pro',
     navSettings:   'Настройки',
+    navGuide:      'Гайд',
 
     // Dashboard filters
-    filterAll:     'ALL',
-    filterOpen:    'OPEN',
-    filterWin:     'WIN',
-    filterLoss:    'LOSS',
+    filterAll:     'Все',
+    filterOpen:    'Открытые',
+    filterWin:     'Тейк',
+    filterLoss:    'Стоп',
     noSignals:     'Нет сигналов',
-    live:          'Live',
-    off:           'Off',
+    live:          'Лайв',
+    off:           'Офлайн',
 
     // SignalCard
     entry:         'Вход',
     stop:          'Стоп',
     take:          'Тейк',
     chart:         '📈 График',
+    analysis:      'Анализ',
 
     // Stats
     statsTitle:       'Статистика',
@@ -111,6 +113,10 @@ export const T = {
     expirySub:     'Продлите сейчас — не теряйте доступ к сигналам',
     expiryRenew:   '⚡ Продлить подписку',
     expiryLater:   'Напомнить через час',
+
+    // Guide
+    guideTitle:    'Руководство',
+    guideSubtitle: 'Как пользоваться MarketPulse Pro',
   },
 
   en: {
@@ -119,6 +125,7 @@ export const T = {
     navStats:      'Statistics',
     navPro:        'Pro',
     navSettings:   'Settings',
+    navGuide:      'Guide',
 
     // Dashboard filters
     filterAll:     'ALL',
@@ -134,6 +141,7 @@ export const T = {
     stop:          'Stop',
     take:          'Take',
     chart:         '📈 Chart',
+    analysis:      'Analysis',
 
     // Stats
     statsTitle:       'Statistics',
@@ -216,6 +224,10 @@ export const T = {
     stars:           'Stars',
     creatingInvoice: 'Creating invoice...',
     starsNote:       'Native Telegram payment. Fast and secure.',
+
+    // Guide
+    guideTitle:    'User Guide',
+    guideSubtitle: 'How to use MarketPulse Pro',
 
     // Expiry popup
     expiryTitle:   'Subscription expiring soon',

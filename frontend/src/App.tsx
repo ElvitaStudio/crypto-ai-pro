@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Stats } from './pages/Stats'
 import { Settings } from './pages/Settings'
 import { Pro } from './pages/Pro'
+import { Guide } from './pages/Guide'
 import { Paywall, TrialBanner } from './components/Paywall'
 import { ExpiryPopup } from './components/ExpiryPopup'
 import { useAccess } from './hooks/useAccess'
@@ -19,6 +20,7 @@ export function App() {
     { id: 'feed',     label: t('navSignals'),  icon: '📡'  },
     { id: 'stats',    label: t('navStats'),    icon: '📈'  },
     { id: 'pro',      label: t('navPro'),      icon: '💎', pro: true },
+    { id: 'guide',    label: t('navGuide'),    icon: '📖'  },
     { id: 'settings', label: t('navSettings'), icon: '⚙️'  },
   ]
 
@@ -52,6 +54,7 @@ export function App() {
         {page === 'pro'      && (
           <Pro access={access} onUpgrade={() => setShowPaywall(true)} />
         )}
+        {page === 'guide'    && <Guide />}
       </div>
 
       <nav style={styles.nav}>

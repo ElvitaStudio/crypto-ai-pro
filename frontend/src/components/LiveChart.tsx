@@ -13,6 +13,18 @@ import type { ChartData, Zone } from '../types'
 import { fetchChartData } from '../api'
 import { HeatmapChart } from './HeatmapChart'
 
+function fp(n: number): string {
+  if (!n && n !== 0) return '—'
+  const a = Math.abs(n)
+  if (a >= 10_000) return n.toFixed(1)
+  if (a >= 1_000)  return n.toFixed(2)
+  if (a >= 100)    return n.toFixed(2)
+  if (a >= 10)     return n.toFixed(3)
+  if (a >= 1)      return n.toFixed(4)
+  if (a >= 0.1)    return n.toFixed(5)
+  return n.toFixed(6)
+}
+
 const TIMEFRAMES = ['5m', '15m', '1h', '4h'] as const
 type TF = typeof TIMEFRAMES[number]
 
@@ -450,9 +462,9 @@ export function LiveChart({ symbol, signalEntry, signalSl, signalTp, signalDirec
         {signalDirection && (
           <div style={{ ...s.badge, background: signalDirection === 'LONG' ? '#26a17b15' : '#e74c3c15', borderColor: signalDirection === 'LONG' ? '#26a17b40' : '#e74c3c40' }}>
             <span style={{ color: signalDirection === 'LONG' ? '#26a17b' : '#e74c3c', fontWeight: 700, fontSize: 12 }}>{signalDirection}</span>
-            {signalEntry && <span style={s.badgeVal}>Вход <b>{signalEntry}</b></span>}
-            {signalSl    && <span style={{ ...s.badgeVal, color: '#e74c3c' }}>SL: {signalSl}</span>}
-            {signalTp    && <span style={{ ...s.badgeVal, color: '#26a17b' }}>TP: {signalTp}</span>}
+            {signalEntry && <span style={s.badgeVal}>Вход <b>{fp(signalEntry)}</b></span>}
+            {signalSl    && <span style={{ ...s.badgeVal, color: '#e74c3c' }}>SL: {fp(signalSl)}</span>}
+            {signalTp    && <span style={{ ...s.badgeVal, color: '#26a17b' }}>TP: {fp(signalTp)}</span>}
           </div>
         )}
 
@@ -467,7 +479,7 @@ export function LiveChart({ symbol, signalEntry, signalSl, signalTp, signalDirec
               <div style={{ fontSize: 10, color: '#4b5563', textAlign: 'center', padding: '4px 0', letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 0 }}>
                 Тепловая карта объёмов · {tf}
               </div>
-              <HeatmapChart candles={data.candles} poc={data.poc} vah={data.vah} val={data.val} />
+              <HeatmapChart candles={data.candles} poc={data.poc} vah={data.vah} val={data.val} visible={showHeatmap} />
             </div>
           )}
 

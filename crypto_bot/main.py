@@ -4,6 +4,9 @@ Main runner: launches all 4 strategies in parallel threads.
 Each strategy runs on its own scan interval and sends to its own Telegram channel.
 """
 
+import matplotlib
+matplotlib.use("Agg")  # non-interactive backend — required for background threads on macOS
+
 import sys
 import time
 import threading
@@ -17,6 +20,7 @@ from core import telegram as tg
 from core.tracker import Tracker, Trade
 from core.ai_council import council_review
 from core.signal_db import save_signal, update_signal_result
+from core import signal_gate
 
 from strategies.volume_level import VolumeLevelStrategy
 from strategies.multi import MultiStrategy
@@ -80,6 +84,12 @@ class BotRunner:
                     if self.tracker and self.tracker.is_active(sig["symbol"]):
                         continue
 
+                    # ── Quality gate: cooldown + R:R + HTF trend ──────────
+                    passed, reason = signal_gate.check(sig)
+                    if not passed:
+                        print(f"[{self.name}] GATE BLOCKED {sig['symbol']} — {reason}")
+                        continue
+
                     # AI Council review
                     verdict = council_review(sig)
                     if not verdict.approved:
@@ -95,6 +105,7 @@ class BotRunner:
                     print(f"[{self.name}] SIGNAL {sig['symbol']} {sig['direction']} | {verdict.summary}")
 
                     save_signal(self.name, sig, verdict)
+                    signal_gate.mark_sent(sig["symbol"])   # start cooldown
 
                     if self.tracker:
                         self.tracker.add(Trade(

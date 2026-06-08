@@ -12,9 +12,16 @@ const STATUS_CONFIG = {
 }
 
 function fmt(n: number) {
-  if (n >= 1000) return n.toLocaleString('ru', { maximumFractionDigits: 1 })
-  if (n >= 1)    return n.toFixed(2)
-  return n.toFixed(4)
+  if (!n && n !== 0) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 10_000) return n.toFixed(1)
+  if (abs >= 1_000)  return n.toFixed(2)
+  if (abs >= 100)    return n.toFixed(2)
+  if (abs >= 10)     return n.toFixed(3)
+  if (abs >= 1)      return n.toFixed(4)
+  if (abs >= 0.1)    return n.toFixed(5)
+  if (abs >= 0.01)   return n.toFixed(6)
+  return n.toFixed(7)
 }
 
 function timeAgo(ts: number) {

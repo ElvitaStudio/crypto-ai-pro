@@ -4,6 +4,7 @@ Strategy: Fractal Level Retest — from titanbot.py
 """
 
 import pandas as pd
+import pandas_ta as ta
 
 from config import FRACTAL as CFG
 from core.chart import chart_hline
@@ -30,6 +31,12 @@ class FractalStrategy(BaseStrategy):
             df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
             df.set_index("timestamp", inplace=True)
+
+            # ── Indicators for feature dict & AI context ──────────────────
+            df["rsi"] = ta.rsi(df["close"], length=14)
+            adx_df    = ta.adx(df["high"], df["low"], df["close"], length=14)
+            df["adx"] = adx_df["ADX_14"]
+            df["vol_sma"] = df["volume"].rolling(20).mean()
 
             price = df["close"].iloc[-1]
             open_ = df["open"].iloc[-1]
@@ -66,6 +73,11 @@ class FractalStrategy(BaseStrategy):
             if risk <= 0:
                 return None
 
+            last      = df.iloc[-1]
+            rsi_val   = round(float(last["rsi"]),   2) if pd.notna(last["rsi"])   else 50.0
+            adx_val   = round(float(last["adx"]),   2) if pd.notna(last["adx"])   else 0.0
+            vol_ratio = round(float(last["volume"] / last["vol_sma"]), 2) if last["vol_sma"] > 0 else 1.0
+
             clean = symbol.split(":")[0]
             msg = (
                 f"🏛 TITAN: PRICE ACTION | `{clean}`\n"
@@ -88,8 +100,12 @@ class FractalStrategy(BaseStrategy):
                 "message": msg,
                 "chart_buf": chart,
                 "strategy_name": "FractalRetest",
-                "reasoning": desc,
-                "features": {},
+                "reasoning": f"{desc}. RSI={rsi_val}, ADX={adx_val}, VolRatio={vol_ratio}",
+                "features": {
+                    "rsi":       rsi_val,
+                    "adx":       adx_val,
+                    "vol_ratio": vol_ratio,
+                },
             }
         except Exception:
             return None

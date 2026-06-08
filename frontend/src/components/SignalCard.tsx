@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Signal } from '../types'
 import { AIDetail } from './AIDetail'
 import { LiveChart } from './LiveChart'
+import { TechAnalysis } from './TechAnalysis'
 import { useLang } from '../i18n/LangContext'
 
 interface Props { signal: Signal }
@@ -13,18 +14,53 @@ const STRATEGY_LABELS: Record<string, string> = {
   TitanFractal: '🏛 Fractal',
 }
 
-function statusColor(s: string) {
-  if (s === 'WIN')  return '#26a17b'
-  if (s === 'LOSS') return '#e74c3c'
-  return '#f39c12'
-}
-
 function fmtTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
 function fmtDate(ts: number) {
   return new Date(ts * 1000).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+}
+
+/**
+ * Smart price formatter: picks decimal places based on price magnitude
+ * to avoid floating-point noise (e.g. 7.983879999999999).
+ */
+function fmtPrice(n: number): string {
+  if (!n && n !== 0) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 10_000) return n.toFixed(1)
+  if (abs >= 1_000)  return n.toFixed(2)
+  if (abs >= 100)    return n.toFixed(2)
+  if (abs >= 10)     return n.toFixed(3)
+  if (abs >= 1)      return n.toFixed(4)
+  if (abs >= 0.1)    return n.toFixed(5)
+  if (abs >= 0.01)   return n.toFixed(6)
+  return n.toFixed(7)
+}
+
+function StatusBadge({ status, pnl }: { status: string; pnl: number | null }) {
+  if (status === 'WIN') {
+    return (
+      <span style={{ ...styles.statusBadge, background: 'rgba(38,161,123,0.2)', color: '#3fb950', border: '1px solid rgba(38,161,123,0.4)' }}>
+        ✓ +{pnl?.toFixed(1)}%
+      </span>
+    )
+  }
+  if (status === 'LOSS') {
+    return (
+      <span style={{ ...styles.statusBadge, background: 'rgba(231,76,60,0.2)', color: '#f85149', border: '1px solid rgba(231,76,60,0.4)' }}>
+        ✗ {pnl?.toFixed(1)}%
+      </span>
+    )
+  }
+  // OPEN
+  return (
+    <span style={{ ...styles.statusBadge, background: 'rgba(243,156,18,0.15)', color: '#f39c12', border: '1px solid rgba(243,156,18,0.35)' }}>
+      <span style={styles.liveDot} />
+      Live
+    </span>
+  )
 }
 
 function AIBadge({ signal }: { signal: Signal }) {
@@ -39,8 +75,9 @@ function AIBadge({ signal }: { signal: Signal }) {
 
 export function SignalCard({ signal }: Props) {
   const { t }  = useLang()
-  const [showAI, setShowAI]       = useState(false)
-  const [showChart, setShowChart] = useState(false)
+  const [showAI, setShowAI]           = useState(false)
+  const [showChart, setShowChart]     = useState(false)
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const rr = Math.abs(signal.tp - signal.entry) / Math.abs(signal.entry - signal.sl)
 
   return (
@@ -51,10 +88,7 @@ export function SignalCard({ signal }: Props) {
             {signal.direction}
           </span>
           <span style={styles.symbol}>{signal.symbol}</span>
-          <span style={{ ...styles.status, color: statusColor(signal.status) }}>
-            {signal.status === 'WIN'  ? `+${signal.pnl_pct?.toFixed(1)}%` :
-             signal.status === 'LOSS' ? `${signal.pnl_pct?.toFixed(1)}%`  : '●'}
-          </span>
+          <StatusBadge status={signal.status} pnl={signal.pnl_pct} />
         </div>
 
         <div style={styles.row}>
@@ -65,15 +99,15 @@ export function SignalCard({ signal }: Props) {
         <div style={styles.levels}>
           <div style={styles.level}>
             <span style={styles.label}>{t('entry')}</span>
-            <span>{signal.entry}</span>
+            <span>{fmtPrice(signal.entry)}</span>
           </div>
           <div style={styles.level}>
             <span style={styles.label}>{t('stop')}</span>
-            <span style={{ color: '#e74c3c' }}>{signal.sl}</span>
+            <span style={{ color: '#e74c3c' }}>{fmtPrice(signal.sl)}</span>
           </div>
           <div style={styles.level}>
             <span style={styles.label}>{t('take')}</span>
-            <span style={{ color: '#26a17b' }}>{signal.tp.toFixed(4)}</span>
+            <span style={{ color: '#26a17b' }}>{fmtPrice(signal.tp)}</span>
           </div>
           <div style={styles.level}>
             <span style={styles.label}>R:R</span>
@@ -85,10 +119,12 @@ export function SignalCard({ signal }: Props) {
           <button style={{ ...styles.actionBtn, flex: 1 }} onClick={() => setShowChart(true)}>
             {t('chart')}
           </button>
+          <button style={{ ...styles.actionBtn, ...styles.analysisBtn, flex: 1 }} onClick={() => setShowAnalysis(true)}>
+            🔬 {t('analysis')}
+          </button>
           {signal.ai_votes.length > 0 && (
-            <button style={{ ...styles.actionBtn, flex: 2 }} onClick={() => setShowAI(true)}>
+            <button style={{ ...styles.actionBtn, flex: 1 }} onClick={() => setShowAI(true)}>
               <AIBadge signal={signal} />
-              <span style={{ fontSize: 11, opacity: 0.5, marginLeft: 6 }}>AI →</span>
             </button>
           )}
         </div>
@@ -104,6 +140,7 @@ export function SignalCard({ signal }: Props) {
           onClose={() => setShowChart(false)}
         />
       )}
+      {showAnalysis && <TechAnalysis signal={signal} onClose={() => setShowAnalysis(false)} />}
       {showAI && <AIDetail signal={signal} onClose={() => setShowAI(false)} />}
     </>
   )
@@ -120,5 +157,8 @@ const styles: Record<string, React.CSSProperties> = {
   levels:    { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, marginTop: 4 },
   level:     { display: 'flex', flexDirection: 'column' as const, gap: 2, fontSize: 12 },
   label:     { fontSize: 10, opacity: 0.45, textTransform: 'uppercase' as const },
-  actionBtn: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'inherit', textAlign: 'left' as const, display: 'flex', alignItems: 'center', fontSize: 12, gap: 4 },
+  actionBtn: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: 'inherit', textAlign: 'center' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, gap: 4 },
+  analysisBtn: { background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.35)', color: '#a78bfa' },
+  statusBadge: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 },
+  liveDot: { width: 6, height: 6, borderRadius: '50%', background: '#f39c12', animation: 'badgePulse 2s ease-in-out infinite' },
 }
