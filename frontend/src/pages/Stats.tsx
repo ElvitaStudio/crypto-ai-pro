@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchSummary, fetchStrategies, fetchSignals } from '../api'
 import type { Summary, StrategyStat, Signal } from '../types'
+import { useLang } from '../i18n/LangContext'
 
 // ── Signal history modal ──────────────────────────────────────────────────────
 
@@ -108,6 +109,7 @@ function SignalDetail({ s, onClose }: { s: Signal; onClose: () => void }) {
 }
 
 function SignalsModal({ onClose, initialFilter = 'ALL' }: { onClose: () => void; initialFilter?: 'ALL' | 'OPEN' | 'WIN' | 'LOSS' }) {
+  const { t } = useLang()
   const [signals, setSignals]   = useState<Signal[]>([])
   const [loading, setLoading]   = useState(true)
   const [filter, setFilter]     = useState<'ALL' | 'OPEN' | 'WIN' | 'LOSS'>(initialFilter)
@@ -133,9 +135,9 @@ return (
           <div style={st.modalHeader}>
             <div>
               <div style={st.modalTitle}>
-                {filter === 'WIN' ? '🟢 Тейк' : filter === 'LOSS' ? '🔴 Стоп-лоссы' : '📋 История сигналов'}
+                {filter === 'WIN' ? t('historyTake') : filter === 'LOSS' ? t('historyStop') : t('historyTitle')}
               </div>
-              <div style={st.modalSub}>За последние 3 суток · {filtered.length} сигналов</div>
+              <div style={st.modalSub}>{t('historyLast3')} · {filtered.length}</div>
             </div>
             <button style={st.closeBtn} onClick={onClose}>✕</button>
           </div>
@@ -145,7 +147,7 @@ return (
           <div style={st.list}>
             {loading && <div style={st.empty}>Загрузка...</div>}
             {!loading && filtered.length === 0 && (
-              <div style={st.empty}>Нет сигналов за 3 суток</div>
+              <div style={st.empty}>{t('noHistory')}</div>
             )}
             {filtered.map(s => (
               <SignalRow key={s.id} s={s} onClick={() => setSelected(s)} />
@@ -196,6 +198,7 @@ function StratRow({ s }: { s: StrategyStat }) {
 }
 
 export function Stats() {
+  const { t } = useLang()
   const [summary, setSummary]       = useState<Summary | null>(null)
   const [strategies, setStrategies] = useState<StrategyStat[]>([])
   const [showHistory, setShowHistory] = useState(false)
@@ -210,43 +213,43 @@ export function Stats() {
 
   return (
     <div>
-      <h2 style={styles.title}>Статистика</h2>
+      <h2 style={styles.title}>{t('statsTitle')}</h2>
 
       <div style={styles.grid}>
         <StatBox
-          label="Всего сигналов"
+          label={t('totalSignals')}
           value={summary.total_signals}
           onClick={() => { setHistoryFilter('ALL'); setShowHistory(true) }}
         />
-        <StatBox label="Win Rate" value={`${summary.win_rate}%`} />
+        <StatBox label={t('winRate')} value={`${summary.win_rate}%`} />
         <StatBox
-          label="Тейк-профит"
+          label={t('takeProfit')}
           value={summary.total_wins}
           sub="WIN"
           onClick={() => { setHistoryFilter('WIN'); setShowHistory(true) }}
         />
         <StatBox
-          label="Стоп-лосс"
+          label={t('stopLoss')}
           value={summary.total_losses}
           sub="LOSS"
           onClick={() => { setHistoryFilter('LOSS'); setShowHistory(true) }}
         />
-        <StatBox label="Открытые" value={summary.total_open}   sub="OPEN" />
+        <StatBox label={t('openPositions')} value={summary.total_open} sub="OPEN" />
         <StatBox
-          label="Суммарный P&L"
+          label={t('totalPnl')}
           value={`${summary.total_pnl >= 0 ? '+' : ''}${summary.total_pnl}%`}
         />
       </div>
 
       {summary.ai_blocked > 0 && (
         <div style={styles.aiBlocked}>
-          🤖 AI Совет заблокировал <b>{summary.ai_blocked}</b> сигналов
+          🤖 {t('aiBlocked')} <b>{summary.ai_blocked}</b> {t('aiBlockedSuffix')}
         </div>
       )}
 
       {strategies.length > 0 && (
         <>
-          <h3 style={styles.subTitle}>По стратегиям</h3>
+          <h3 style={styles.subTitle}>{t('byStrategy')}</h3>
           {strategies.map(s => <StratRow key={s.strategy} s={s} />)}
         </>
       )}

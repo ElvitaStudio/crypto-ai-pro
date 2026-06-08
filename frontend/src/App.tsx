@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Page } from './types'
+import { useLang } from './i18n/LangContext'
 import { Dashboard } from './pages/Dashboard'
 import { Stats } from './pages/Stats'
 import { Settings } from './pages/Settings'
@@ -8,17 +9,18 @@ import { Paywall, TrialBanner } from './components/Paywall'
 import { ExpiryPopup } from './components/ExpiryPopup'
 import { useAccess } from './hooks/useAccess'
 
-const NAV: { id: Page; label: string; icon: string; pro?: boolean }[] = [
-  { id: 'feed',     label: 'Сигналы',    icon: '📡'  },
-  { id: 'stats',    label: 'Статистика', icon: '📈'  },
-  { id: 'pro',      label: 'Pro',        icon: '💎', pro: true },
-  { id: 'settings', label: 'Настройки',  icon: '⚙️'  },
-]
-
 export function App() {
   const [page, setPage] = useState<Page>('feed')
   const [showPaywall, setShowPaywall] = useState(false)
   const access = useAccess()
+  const { t }  = useLang()
+
+  const NAV: { id: Page; label: string; icon: string; pro?: boolean }[] = [
+    { id: 'feed',     label: t('navSignals'),  icon: '📡'  },
+    { id: 'stats',    label: t('navStats'),    icon: '📈'  },
+    { id: 'pro',      label: t('navPro'),      icon: '💎', pro: true },
+    { id: 'settings', label: t('navSettings'), icon: '⚙️'  },
+  ]
 
   // Block access when expired
   if (access.status === 'expired' || showPaywall) {

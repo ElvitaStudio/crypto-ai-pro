@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchSettings, updateSettings } from '../api'
+import { useLang } from '../i18n/LangContext'
 
 type Settings = Record<string, string>
 
@@ -39,6 +40,7 @@ function NumberRow({ label, value, min, max, onChange }: {
 }
 
 export function Settings() {
+  const { t } = useLang()
   const [settings, setSettings] = useState<Settings>({})
   const [saved, setSaved] = useState(false)
 
@@ -58,19 +60,19 @@ export function Settings() {
 
   return (
     <div>
-      <h2 style={styles.title}>Настройки</h2>
+      <h2 style={styles.title}>{t('settingsTitle')}</h2>
 
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>AI Совет</h3>
+        <h3 style={styles.sectionTitle}>{t('aiCouncil')}</h3>
         <Toggle
-          label="Фильтровать через AI"
+          label={t('filterViaAI')}
           checked={settings['ai_council_enabled'] === 'true'}
           onChange={(v) => set('ai_council_enabled', String(v))}
         />
       </div>
 
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Стратегии</h3>
+        <h3 style={styles.sectionTitle}>{t('strategies')}</h3>
         {STRATEGY_KEYS.map((key) => (
           <Toggle
             key={key}
@@ -82,7 +84,7 @@ export function Settings() {
       </div>
 
       <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Монет для скана</h3>
+        <h3 style={styles.sectionTitle}>{t('coinsToScan')}</h3>
         {STRATEGY_KEYS.map((key) => (
           <NumberRow
             key={key}
@@ -96,7 +98,7 @@ export function Settings() {
       </div>
 
       <button style={{ ...styles.saveBtn, background: saved ? '#26a17b' : 'rgba(255,255,255,0.1)' }} onClick={save}>
-        {saved ? '✓ Сохранено' : 'Сохранить'}
+        {saved ? t('saved') : t('save')}
       </button>
     </div>
   )

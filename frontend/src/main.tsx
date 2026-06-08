@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { AdminApp } from './admin/AdminApp'
+import { LangProvider } from './i18n/LangContext'
 
 // Initialize Telegram Mini App
 const tg = (window as Window & { Telegram?: { WebApp?: { expand: () => void; ready: () => void } } }).Telegram?.WebApp
@@ -13,6 +14,8 @@ const isAdmin = window.location.pathname.startsWith('/admin')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isAdmin ? <AdminApp /> : <App />}
+    <LangProvider>
+      {isAdmin ? <AdminApp /> : <App />}
+    </LangProvider>
   </StrictMode>
 )

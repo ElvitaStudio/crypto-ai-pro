@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../i18n/LangContext'
 
 const POPUP_KEY = 'expiry_popup_last_shown'
 const HOUR_MS   = 60 * 60 * 1000
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function ExpiryPopup({ hoursUntilExpiry, expiresAt, onRenew }: Props) {
+  const { t }  = useLang()
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -45,21 +47,18 @@ export function ExpiryPopup({ hoursUntilExpiry, expiresAt, onRenew }: Props) {
         <div style={s.icon}>⏰</div>
 
         {/* Text */}
-        <h3 style={s.title}>Подписка скоро истекает</h3>
+        <h3 style={s.title}>{t('expiryTitle')}</h3>
         <p style={s.desc}>
-          До окончания осталось <b style={{ color: '#f87171' }}>{timeStr}</b>
+          {t('expiryLeft')} <b style={{ color: '#f87171' }}>{timeStr}</b>
           {expiryDate && <> · {expiryDate}</>}
         </p>
-        <p style={s.subdesc}>
-          Продлите сейчас — не теряйте доступ к сигналам
-        </p>
+        <p style={s.subdesc}>{t('expirySub')}</p>
 
-        {/* Actions */}
         <button style={s.renewBtn} onClick={() => { setVisible(false); onRenew() }}>
-          ⚡ Продлить подписку
+          {t('expiryRenew')}
         </button>
         <button style={s.laterBtn} onClick={() => setVisible(false)}>
-          Напомнить через час
+          {t('expiryLater')}
         </button>
       </div>
     </div>
