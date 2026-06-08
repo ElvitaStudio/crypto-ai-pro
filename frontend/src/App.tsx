@@ -44,7 +44,7 @@ export function App() {
       )}
 
       <div style={styles.content}>
-        {page === 'feed'     && <Dashboard />}
+        {page === 'feed'     && <Dashboard accessStatus={access.status} onProClick={() => setPage('pro')} />}
         {page === 'stats'    && <Stats />}
         {page === 'settings' && <Settings />}
         {page === 'pro'      && (
