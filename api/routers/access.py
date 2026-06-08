@@ -22,9 +22,10 @@ import time
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel
 
+from api.auth_deps import get_current_web_user
 from api.database import get_conn
 
 logger = logging.getLogger(__name__)
@@ -251,6 +252,120 @@ def payment_info(
     }
 
 
+# ── Web user access helpers ───────────────────────────────────────────────────
+
+def _web_suffix(web_user_id: int) -> float:
+    """Sub-cent suffix for web users: range offset by 1 to avoid collisions with Telegram."""
+    return (web_user_id % 900) / 10000 + 0.09
+
+
+def _web_payment_amounts(web_user_id: int) -> dict[str, float]:
+    sfx = _web_suffix(web_user_id)
+    return {pid: round(price + sfx, 4) for pid, (price, _) in PLANS.items()}
+
+
+def _get_web_user(web_user_id: int) -> dict | None:
+    with get_conn() as con:
+        row = con.execute(
+            "SELECT * FROM web_users WHERE id = ?", (web_user_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def _grant_days_web(web_user_id: int, days: int, tx_hash: str, amount: float,
+                    network: str = "TRC20", plan_id: str = "1m") -> None:
+    now = _now()
+    with get_conn() as con:
+        row = con.execute(
+            "SELECT paid_until FROM web_users WHERE id = ?", (web_user_id,)
+        ).fetchone()
+        current_expiry = row["paid_until"] if row and row["paid_until"] else now
+        new_expiry = max(current_expiry, now) + days * 86400
+        con.execute(
+            "UPDATE web_users SET paid_until = ? WHERE id = ?",
+            (new_expiry, web_user_id),
+        )
+        con.execute("""
+            INSERT OR IGNORE INTO payments
+                (web_user_id, tx_hash, amount_usdt, network, plan_id, confirmed_at, days_granted)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (web_user_id, tx_hash, amount, network, plan_id, now, days))
+        con.commit()
+
+
+# ── Web user access routes ────────────────────────────────────────────────────
+
+@router.post("/web/trial")
+async def web_start_trial(current_user: dict = Depends(get_current_web_user)):
+    user = _get_web_user(current_user["id"])
+    if not user:
+        raise Exception("User not found")
+    status = _access_status(user)
+    uid = current_user["id"]
+    return {
+        "userId": uid,
+        **status,
+        "trial_hours": TRIAL_HOURS,
+        "payment_amounts": _web_payment_amounts(uid),
+        "wallets": WALLETS,
+        "plans": {pid: {"price": p, "days": d} for pid, (p, d) in PLANS.items()},
+    }
+
+
+@router.get("/web/check")
+async def web_check_access(current_user: dict = Depends(get_current_web_user)):
+    user = _get_web_user(current_user["id"])
+    if not user:
+        # Auto-start trial for new web users
+        now = _now()
+        with get_conn() as con:
+            con.execute(
+                "UPDATE web_users SET trial_start = ? WHERE id = ? AND trial_start IS NULL",
+                (now, current_user["id"]),
+            )
+            con.commit()
+        user = _get_web_user(current_user["id"])
+
+    status = _access_status(user)
+    uid = current_user["id"]
+    amounts = _web_payment_amounts(uid)
+    return {
+        "userId": uid,
+        **status,
+        "payment_amount": amounts["3m"],
+        "wallet": WALLET_TRC20,
+        "price_usdt": PLANS["3m"][0],
+        "payment_amounts": amounts,
+        "wallets": WALLETS,
+    }
+
+
+@router.get("/web/payment-info")
+async def web_payment_info(
+    plan: str = "3m",
+    network: str = "TRC20",
+    current_user: dict = Depends(get_current_web_user),
+):
+    if plan not in PLANS:
+        plan = "3m"
+    if network not in WALLETS:
+        network = "TRC20"
+    uid = current_user["id"]
+    price, days = PLANS[plan]
+    amount = round(price + _web_suffix(uid), 4)
+    wallet = WALLETS[network]
+    return {
+        "wallet": wallet,
+        "network": network,
+        "currency": "USDT",
+        "amount": amount,
+        "amount_display": f"{amount:.4f}",
+        "plan": plan,
+        "days": days,
+        "price": price,
+    }
+
+
 # ── Expiry reminder background task ──────────────────────────────────────────
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
@@ -359,17 +474,29 @@ async def _poll_tron_transactions() -> None:
     seen_hashes: set[str] = {r["tx_hash"] for r in rows}
     headers = {"TRON-PRO-API-KEY": TRON_API_KEY} if TRON_API_KEY else {}
 
-    # Pre-build amount lookup: {rounded_amount_str → (telegram_id, plan_id, days)}
-    def _build_lookup() -> dict[str, tuple[int, str, int]]:
-        lookup: dict[str, tuple[int, str, int]] = {}
+    # Pre-build amount lookup: {rounded_amount_str → ("tg"|"web", id, plan_id, days)}
+    def _build_lookup() -> dict[str, tuple[str, int, str, int]]:
+        lookup: dict[str, tuple[str, int, str, int]] = {}
         with get_conn() as con:
-            rows = con.execute("SELECT telegram_id FROM users").fetchall()
-        for row in rows:
+            tg_rows = con.execute("SELECT telegram_id FROM users").fetchall()
+        for row in tg_rows:
             tg_id = row["telegram_id"]
             sfx = _suffix(tg_id)
             for pid, (price, days) in PLANS.items():
                 key = f"{round(price + sfx, 4):.4f}"
-                lookup[key] = (tg_id, pid, days)
+                lookup[key] = ("tg", tg_id, pid, days)
+        # Web users
+        try:
+            with get_conn() as con:
+                web_rows = con.execute("SELECT id FROM web_users").fetchall()
+            for row in web_rows:
+                uid = row["id"]
+                sfx = _web_suffix(uid)
+                for pid, (price, days) in PLANS.items():
+                    key = f"{round(price + sfx, 4):.4f}"
+                    lookup[key] = ("web", uid, pid, days)
+        except Exception:
+            pass  # web_users table may not exist yet
         return lookup
 
     while True:
@@ -408,13 +535,20 @@ async def _poll_tron_transactions() -> None:
                     match      = lookup.get(amount_key)
 
                     if match:
-                        tg_id, plan_id, days = match
-                        _grant_days(tg_id, days, tx_hash, amount, "TRC20", plan_id)
+                        user_type, uid, plan_id, days = match
+                        if user_type == "tg":
+                            _grant_days(uid, days, tx_hash, amount, "TRC20", plan_id)
+                            logger.info(
+                                "Payment confirmed: telegram_id=%s plan=%s amount=%.4f tx=%s",
+                                uid, plan_id, amount, tx_hash[:16],
+                            )
+                        else:
+                            _grant_days_web(uid, days, tx_hash, amount, "TRC20", plan_id)
+                            logger.info(
+                                "Payment confirmed: web_user_id=%s plan=%s amount=%.4f tx=%s",
+                                uid, plan_id, amount, tx_hash[:16],
+                            )
                         seen_hashes.add(tx_hash)
-                        logger.info(
-                            "Payment confirmed: telegram_id=%s plan=%s amount=%.4f tx=%s",
-                            tg_id, plan_id, amount, tx_hash[:16],
-                        )
                     else:
                         logger.debug("Unknown payment amount=%.4f tx=%s", amount, tx_hash[:16])
 

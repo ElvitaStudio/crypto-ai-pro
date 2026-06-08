@@ -12,7 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.database import get_conn
-from api.routers import signals, stats, settings, chart, access, stars, admin
+from api.routers import signals, stats, settings, chart, access, stars, admin, auth
 from api.routers.signals import _row_to_signal
 from api.routers.access import _poll_tron_transactions, _send_expiry_reminders
 
@@ -166,6 +166,7 @@ app.include_router(chart.router)
 app.include_router(access.router)
 app.include_router(stars.router)
 app.include_router(admin.router)
+app.include_router(auth.router)
 
 
 @app.get("/health")
