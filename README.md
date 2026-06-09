@@ -1,8 +1,9 @@
-# 📊 MarketPulse Pro — Telegram Mini App
+# 📊 MarketPulse Pro — Crypto AI Signals
 
-> AI-powered crypto trading signals with live charts, volume analysis, and smart signal filtering — delivered as a Telegram Mini App with paid access via USDT or Telegram Stars.
+> AI-powered crypto trading signals with live charts, CVD analysis, and smart signal filtering.
+> Available as a **Telegram Mini App** and a standalone **Web Application** with email registration.
 
-![preview](https://img.shields.io/badge/Platform-Telegram_Mini_App-2CA5E0?style=for-the-badge&logo=telegram)
+![platform](https://img.shields.io/badge/Platform-Web_+_Telegram-2CA5E0?style=for-the-badge&logo=telegram)
 ![stack](https://img.shields.io/badge/Stack-React_+_FastAPI-61DAFB?style=for-the-badge)
 ![license](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
@@ -10,12 +11,24 @@
 
 ## ✨ Features
 
+### 🌐 Web Application (new)
+- Standalone website — works without Telegram
+- **Email + password** registration
+- JWT authentication (7-day tokens stored in `localStorage`)
+- Premium dashboard: collapsible sidebar, access status card, user card
+- **USDT pair search** — filter signals by ticker in real time
+- Stats summary row: Total / Open / Win / Loss / Win Rate
+- Colored filter chips with open-signal count badge
+- Responsive: desktop sidebar + mobile bottom nav
+- Landing page with hero, feature grid, pricing table
+- Shared `web_users` table — USDT payments work for web users too
+
 ### 📡 Trading Signals
 - Real-time BUY / SELL signals with Entry, Stop-Loss, and Take-Profit levels
 - Multi-asset: BTC, ETH, SOL, BNB, XRP, DOGE and 80+ more pairs
 - 4 independent strategies scanning in parallel (30-min intervals)
 - **AI Council** — 3 models vote on each signal (Claude, GPT-4o, Gemini Flash)
-- **Signal Quality Gate** — cooldown, R:R filter, and HTF trend alignment before AI
+- **Signal Quality Gate** — cooldown, R:R filter, HTF trend alignment before AI
 - Auto-close at TP/SL with WebSocket real-time status updates
 
 ### 📊 Signal Quality Pipeline
@@ -29,7 +42,7 @@ Strategy scan → Quality Gate → AI Council → Signal saved → WebSocket pus
 
 ### 📈 Live Charts
 - Full-screen interactive candlestick charts powered by **LightweightCharts v5**
-- **Cumulative Volume Delta (CVD)** — see buy vs sell pressure
+- **Cumulative Volume Delta (CVD)** — buy vs sell pressure sub-chart
 - **Volume Profile** — left-side POC / VAH / VAL levels
 - **Supply & Demand zones** — canvas overlay
 - **Heatmap** 🔥 — price-time volume density map (toggle button)
@@ -40,12 +53,16 @@ Strategy scan → Quality Gate → AI Council → Signal saved → WebSocket pus
 - Strategy explanation (what pattern was detected and why)
 - Key levels with % distance and R:R quality score
 - Visual indicator gauges: RSI, ADX, Volume ratio with context notes
+- **CVD Sparkline** — SVG chart of cumulative delta for last 60 candles
+  - Confirmation badge: ✓ Подтверждает / ⚠ Противоречит signal direction
+  - Stats: start / current / change values in thousands
+  - Context explanation: buyer/seller dominance vs signal direction
 - AI Council votes with model reasoning
 
 ### 📊 Statistics
 - Win Rate, total signals, P&L summary
-- **Take-Profit history** — list of winning signals (last 3 days)
-- **Stop-Loss history** — list of losing signals (last 3 days)
+- Take-Profit history — list of winning signals (last 3 days)
+- Stop-Loss history — list of losing signals (last 3 days)
 - Performance breakdown by strategy
 
 ### 📖 Built-in Guide
@@ -53,18 +70,18 @@ Strategy scan → Quality Gate → AI Council → Signal saved → WebSocket pus
 - SVG illustrations for each indicator: CVD, Volume Profile, Supply/Demand, Heatmap
 - Available in RU and EN
 
-### 🌐 RU / EN Language Support
+### 🌍 RU / EN Language Support
 - Full UI translation via React Context
 - Persisted in `localStorage`
-- Switcher in the top-right of the dashboard
+- Switcher in header (Mini App) and signal feed top bar (Web)
 
 ### 🔐 Access & Payments
-- **24-hour free trial** on first open — no registration
-- **USDT crypto payments**: TRC-20, ERC-20, BEP-20
-- **Telegram Stars** — native in-app payment (instant, no crypto needed)
+- **24-hour free trial** — no registration required (Mini App) or email only (Web)
+- **USDT crypto payments**: TRC-20, ERC-20, BEP-20 (works for Telegram and Web users)
+- **Telegram Stars** — native in-app payment (Mini App only)
 - Automatic payment verification via TronGrid API
 - Expiry reminders: bot message 3 days before, hourly popup in last 24h
-- Blinking FREE / PRO badge in header → taps to Pro page
+- Sidebar access card shows days remaining / trial countdown
 
 ### 💎 Subscription Plans
 | Plan | Price | Stars |
@@ -117,58 +134,76 @@ Strict majority (2/3) required to approve.
 
 ```
 Crypto/
-├── api/                        # FastAPI backend
-│   ├── main.py                 # App entry + WebSocket + TP/SL price monitor
+├── api/                          # FastAPI backend
+│   ├── main.py                   # App entry + WebSocket + TP/SL price monitor
+│   ├── auth_deps.py              # JWT encode/decode, bcrypt, get_current_web_user
 │   ├── database.py
 │   ├── models.py
 │   └── routers/
+│       ├── auth.py               # /auth/register, /auth/login, /auth/me
 │       ├── signals.py
 │       ├── stats.py
-│       ├── chart.py            # OHLCV + Volume Profile + S&D zones
-│       ├── access.py           # Trial / USDT payment / expiry reminders
-│       ├── stars.py            # Telegram Stars payment
-│       └── admin.py            # Admin panel API
+│       ├── chart.py              # OHLCV + CVD delta + Volume Profile + S&D zones
+│       ├── access.py             # Trial / USDT payment for Telegram + Web users
+│       ├── stars.py              # Telegram Stars payment
+│       └── admin.py              # Admin panel API
 │
-├── crypto_bot/                 # Signal scanner (runs as separate process)
-│   ├── main.py                 # BotRunner threads for each strategy
-│   ├── config.py               # Strategy parameters & thresholds
-│   ├── pandas_ta.py            # pandas_ta compatibility shim (uses `ta` lib)
+├── crypto_bot/                   # Signal scanner (runs as separate process)
+│   ├── main.py                   # BotRunner threads for each strategy
+│   ├── config.py                 # Strategy parameters & thresholds
+│   ├── pandas_ta.py              # pandas_ta compatibility shim (uses `ta` lib)
 │   ├── core/
-│   │   ├── ai_council.py       # Multi-model voting with rich context prompt
-│   │   ├── signal_gate.py      # Cooldown + R:R + HTF trend filter
-│   │   ├── signal_db.py        # Shared SQLite writer
-│   │   ├── tracker.py          # Open trade TP/SL tracking
-│   │   ├── exchange.py         # ccxt Binance wrapper
-│   │   └── telegram.py         # Telegram notification sender
+│   │   ├── ai_council.py         # Multi-model voting with rich context prompt
+│   │   ├── signal_gate.py        # Cooldown + R:R + HTF trend filter
+│   │   ├── signal_db.py          # Shared SQLite writer
+│   │   ├── tracker.py            # Open trade TP/SL tracking
+│   │   ├── exchange.py           # ccxt Binance wrapper
+│   │   └── telegram.py           # Telegram notification sender
 │   └── strategies/
 │       ├── base.py
-│       ├── volume_level.py     # RSI/ADX/vol features → AI
-│       ├── multi.py            # BB + EMA + SFP patterns
-│       ├── vwap_channel.py     # VWAP + LinReg channel
-│       └── fractal.py          # Fractal levels + RSI/ADX features
+│       ├── volume_level.py
+│       ├── multi.py
+│       ├── vwap_channel.py
+│       └── fractal.py
 │
-├── frontend/                   # React + Vite + TypeScript Mini App
+├── frontend/                     # React + Vite + TypeScript
+│   ├── index.html                # Mini App entry
+│   ├── website.html              # Web App entry (dual Vite build)
 │   └── src/
 │       ├── components/
-│       │   ├── LiveChart.tsx         # Full-screen chart (LWC v5)
-│       │   ├── HeatmapChart.tsx      # Volume heatmap canvas
-│       │   ├── TechAnalysis.tsx      # Technical analysis bottom sheet
-│       │   ├── Paywall.tsx           # Plans + USDT + Stars
-│       │   ├── ExpiryPopup.tsx       # Hourly expiry reminder popup
-│       │   └── SignalCard.tsx        # Signal feed card with smart price format
+│       │   ├── LiveChart.tsx           # Full-screen chart (LWC v5)
+│       │   ├── HeatmapChart.tsx        # Volume heatmap canvas
+│       │   ├── TechAnalysis.tsx        # Analysis panel + CVD sparkline
+│       │   ├── Paywall.tsx             # Plans + USDT + Stars
+│       │   ├── ExpiryPopup.tsx         # Expiry reminder popup
+│       │   └── SignalCard.tsx          # Signal card with smart price format
 │       ├── hooks/
-│       │   ├── useAccess.ts
-│       │   └── useSignalFeed.ts      # WS feed (init/new/update events)
+│       │   ├── useAccess.ts            # Telegram access hook
+│       │   ├── useWebAccess.ts         # JWT-authenticated access hook
+│       │   └── useSignalFeed.ts        # WS feed (init/new/update events)
 │       ├── i18n/
-│       │   ├── translations.ts       # RU + EN string table
-│       │   └── LangContext.tsx       # Language context + localStorage persist
+│       │   ├── translations.ts
+│       │   └── LangContext.tsx
 │       ├── pages/
-│       │   ├── Dashboard.tsx         # Signal feed with filter buttons
-│       │   ├── Stats.tsx             # Statistics + signal history modal
-│       │   ├── Pro.tsx               # Pro features + pricing + CTA
-│       │   ├── Guide.tsx             # Interactive guide with SVG illustrations
+│       │   ├── Dashboard.tsx           # Mini App signal feed
+│       │   ├── Stats.tsx
+│       │   ├── Pro.tsx
+│       │   ├── Guide.tsx               # Interactive guide with SVG illustrations
 │       │   └── Settings.tsx
-│       └── admin/                    # Admin panel (/admin route)
+│       ├── web/                        # Web App (standalone website)
+│       │   ├── main.tsx                # Web entry point
+│       │   ├── WebApp.tsx              # React Router root
+│       │   ├── AuthContext.tsx         # JWT state: login/register/logout
+│       │   ├── components/
+│       │   │   ├── Navbar.tsx          # Top nav for public pages
+│       │   │   ├── ProtectedRoute.tsx  # Redirect to /login if unauthenticated
+│       │   │   └── WebSignalFeed.tsx   # Signal feed with search + stats
+│       │   └── pages/
+│       │       ├── LandingPage.tsx     # Hero + features + pricing
+│       │       ├── LoginPage.tsx       # Email + password login
+│       │       ├── RegisterPage.tsx    # Registration form
+│       │       └── WebDashboard.tsx    # Premium sidebar dashboard
+│       └── admin/                      # Admin panel (/admin route)
 │
 ├── data/
 │   └── signals.db
@@ -192,21 +227,21 @@ Crypto/
 git clone https://github.com/ElvitaStudio/crypto-ai-pro.git
 cd crypto-ai-pro
 cp .env.example .env
-# Fill in .env with your tokens, wallet addresses, OpenRouter key
+# Fill in .env with your tokens, wallet addresses, keys
 ```
 
 ### 2. Backend
 
 ```bash
-pip install -r api/requirements.txt
-pip install python-dotenv python-multipart ccxt pandas ta
-uvicorn api.main:app --port 8000
+pip3 install python-dotenv python-multipart fastapi uvicorn ccxt pandas ta \
+             python-jose bcrypt httpx python-telegram-bot
+uvicorn api.main:app --port 8000 --reload
 ```
 
 ### 3. Signal Bot
 
 ```bash
-pip install -r crypto_bot/requirements.txt
+pip3 install ccxt pandas ta requests
 python3 crypto_bot/main.py
 ```
 
@@ -218,8 +253,11 @@ npm install
 npm run dev
 ```
 
-- Mini App → [http://localhost:5173](http://localhost:5173)
-- Admin Panel → [http://localhost:5173/admin](http://localhost:5173/admin)
+| URL | What |
+|-----|------|
+| `http://localhost:5173` | Telegram Mini App |
+| `http://localhost:5173/website.html` | Web Application |
+| `http://localhost:5173/admin` | Admin Panel |
 
 ### 5. Register Telegram webhook (after deploy)
 
@@ -232,80 +270,109 @@ curl -X POST https://your-domain.com/stars/set-webhook
 ## ⚙️ Environment Variables
 
 ```env
-# Wallet addresses
+# ── Wallet addresses ──────────────────────────────────────────────
 USDT_WALLET_TRC20=your_trc20_address
 USDT_WALLET_BEP20=your_bep20_address
 USDT_WALLET_ERC20=your_erc20_address
 
-# Subscription prices (USDT)
+# ── Subscription prices (USDT) ────────────────────────────────────
 PRICE_1M=19.99
 PRICE_3M=50.97
 PRICE_6M=89.94
 
-# Trial
+# ── Trial ─────────────────────────────────────────────────────────
 TRIAL_HOURS=24
 
-# Telegram Bot
+# ── Telegram Bot ──────────────────────────────────────────────────
 BOT_TOKEN=123456:ABC-your-token
 WEBHOOK_URL=https://your-domain.com
 
-# Admin Panel
+# ── Admin Panel ───────────────────────────────────────────────────
 ADMIN_TOKEN=your_strong_password
 
-# OpenRouter (AI Council)
+# ── OpenRouter (AI Council) ───────────────────────────────────────
 OPENROUTER_API_KEY=sk-or-...
 
-# TronGrid (optional, increases rate limit)
+# ── TronGrid API (optional) ───────────────────────────────────────
 TRONGRID_API_KEY=
+
+# ── Web Auth (JWT) ────────────────────────────────────────────────
+# Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
+JWT_SECRET_KEY=change_me_strong_random_secret
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
+```
+
+Frontend `.env` (create `frontend/.env`):
+```env
+VITE_API_URL=http://localhost:8000
 ```
 
 ---
 
 ## 🔌 API Reference
 
+### Auth (Web)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Health check |
+| `POST` | `/auth/register` | Register with email + password |
+| `POST` | `/auth/login` | Login, returns JWT |
+| `GET` | `/auth/me` | Get current user profile |
+
+### Access
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/access/check` | Telegram user access status |
+| `POST` | `/access/trial` | Start Telegram trial |
+| `GET` | `/access/web/check` | Web user access status (JWT) |
+| `POST` | `/access/web/trial` | Start web trial (JWT) |
+| `GET` | `/access/web/payment-info` | Payment details for web user (JWT) |
+
+### Signals & Charts
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/signals` | List trading signals |
+| `GET` | `/chart/{symbol}` | OHLCV + CVD delta + Volume Profile |
 | `GET` | `/stats/summary` | Overall statistics |
 | `GET` | `/stats/strategies` | Per-strategy breakdown |
-| `GET` | `/access/check` | Check user access + hours until expiry |
-| `POST` | `/access/trial` | Start free trial |
-| `GET` | `/access/payment-info` | Get USDT payment details |
-| `POST` | `/stars/invoice` | Create Telegram Stars invoice |
-| `POST` | `/webhook/telegram` | Telegram bot webhook |
+| `WS` | `/ws/signals` | Live feed (init / new / update) |
+
+### Admin
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `POST` | `/admin/login` | Admin login |
 | `GET` | `/admin/users` | List all users |
 | `POST` | `/admin/users/{id}/vip` | Grant/revoke VIP |
 | `POST` | `/admin/broadcast` | Send broadcast message |
-| `GET/POST/PUT/DELETE` | `/admin/payment-methods` | Manage payment methods |
-| `WS` | `/ws/signals` | Live signal feed (init / new / update events) |
 
 ---
 
 ## 📦 Tech Stack
 
 **Frontend**
-- React 18 + TypeScript + Vite
+- React 18 + TypeScript + Vite (dual entry: Mini App + Website)
+- React Router v6 (website routing)
 - LightweightCharts v5 (TradingView)
-- React Context i18n (RU/EN)
+- React Context: i18n (RU/EN) + Auth (JWT)
 
 **Backend**
 - FastAPI + Uvicorn
-- SQLite (stdlib `sqlite3`)
-- ccxt — Binance Futures OHLCV + price monitoring
+- SQLite (`sqlite3`) — tables: `signals`, `users`, `web_users`, `payments`
+- ccxt — Binance Futures OHLCV + live price monitoring
+- python-jose — JWT tokens
+- bcrypt — password hashing
 - python-telegram-bot v21
-- python-dotenv
+- httpx — async HTTP (Google token verify, TronGrid)
 
 **Signal Bot**
 - ccxt — market data
-- pandas + ta (technical indicators)
-- OpenRouter — Claude / GPT-4o / Gemini AI voting
+- pandas + ta — technical indicators (RSI, ADX, EMA, VWAP, Bollinger Bands)
+- OpenRouter — Claude / GPT-4o / Gemini parallel AI voting
 
 **Integrations**
-- Binance Futures API — live prices & OHLCV
-- TronGrid API — TRC-20 payment verification
-- Telegram Bot API — Stars payments + notifications + broadcasts
+- Binance Futures API — live prices & OHLCV data
+- TronGrid API — TRC-20 USDT payment verification
+- Telegram Bot API — Stars payments, notifications, broadcasts
 - OpenRouter — multi-model AI signal analysis
 
 ---
