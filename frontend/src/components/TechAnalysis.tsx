@@ -1,4 +1,5 @@
-import type { Signal } from '../types'
+import { useEffect, useState } from 'react'
+import type { Signal, Candle } from '../types'
 import { useLang } from '../i18n/LangContext'
 
 interface Props {
@@ -192,6 +193,161 @@ function getVolContext(vol: number, lang: 'ru' | 'en'): string {
   return `Volume ${vol.toFixed(1)}× normal — standard activity.`
 }
 
+// ── CVD helpers ───────────────────────────────────────────────────────────────
+
+const BASE_URL = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_URL ?? ''
+
+/** Fetch candles and compute cumulative delta from buy/sell volume. */
+function useCvd(symbol: string, timeframe = '15m', limit = 60) {
+  const [candles, setCandles] = useState<Candle[] | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${BASE_URL}/api/chart/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=${limit}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.candles) setCandles(data.candles)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [symbol, timeframe, limit])
+
+  if (!candles || candles.length === 0) return { cvd: null, loading }
+
+  // Compute cumulative delta from per-candle delta field
+  let cum = 0
+  const cvd = candles.map(c => {
+    cum += (c.delta ?? 0)
+    return cum
+  })
+
+  return { cvd, loading }
+}
+
+/** SVG sparkline for CVD. */
+function CvdSparkline({ cvd, direction }: { cvd: number[]; direction: 'LONG' | 'SHORT' }) {
+  const W = 280
+  const H = 56
+  const PAD = 4
+
+  const min = Math.min(...cvd)
+  const max = Math.max(...cvd)
+  const range = max - min || 1
+
+  const pts = cvd.map((v, i) => {
+    const x = PAD + (i / (cvd.length - 1)) * (W - PAD * 2)
+    const y = PAD + (1 - (v - min) / range) * (H - PAD * 2)
+    return `${x},${y}`
+  })
+  const polyline = pts.join(' ')
+  const lastVal  = cvd[cvd.length - 1]
+  const prevVal  = cvd[cvd.length - 4] ?? cvd[0]
+  const trend    = lastVal > prevVal ? 'UP' : lastVal < prevVal ? 'DOWN' : 'FLAT'
+  const aligned  = (direction === 'LONG' && trend === 'UP') || (direction === 'SHORT' && trend === 'DOWN')
+  const lineColor = trend === 'UP' ? '#3fb950' : trend === 'DOWN' ? '#f85149' : '#8b949e'
+
+  // Fill polygon: line + baseline
+  const lastPt  = pts[pts.length - 1].split(',')
+  const firstPt = pts[0].split(',')
+  const fillPts = `${polyline} ${lastPt[0]},${H} ${firstPt[0]},${H}`
+
+  return (
+    <div style={cvdS.wrap}>
+      <div style={cvdS.header}>
+        <span style={cvdS.title}>〽 CVD</span>
+        <span style={{ ...cvdS.trendBadge, background: aligned ? 'rgba(63,185,80,0.12)' : 'rgba(248,81,73,0.12)', color: aligned ? '#3fb950' : '#f85149', borderColor: aligned ? 'rgba(63,185,80,0.3)' : 'rgba(248,81,73,0.3)' }}>
+          {aligned ? '✓ Подтверждает' : '⚠ Противоречит'}
+        </span>
+        <span style={{ ...cvdS.trendArrow, color: lineColor }}>
+          {trend === 'UP' ? '↑' : trend === 'DOWN' ? '↓' : '→'}
+        </span>
+      </div>
+
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+        {/* Zero line */}
+        <line
+          x1={PAD} y1={PAD + (1 - (0 - min) / range) * (H - PAD * 2)}
+          x2={W - PAD} y2={PAD + (1 - (0 - min) / range) * (H - PAD * 2)}
+          stroke="rgba(255,255,255,0.08)" strokeWidth="1" strokeDasharray="3 3"
+        />
+        {/* Fill */}
+        <polygon points={fillPts} fill={lineColor} opacity="0.08" />
+        {/* Line */}
+        <polyline points={polyline} fill="none" stroke={lineColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Last dot */}
+        <circle cx={lastPt[0]} cy={lastPt[1]} r="3" fill={lineColor} />
+      </svg>
+
+      <div style={cvdS.stats}>
+        <span style={cvdS.stat}>
+          <span style={cvdS.statLabel}>Старт </span>
+          <span style={{ color: '#8b949e' }}>{cvd[0] > 0 ? '+' : ''}{(cvd[0] / 1000).toFixed(1)}K</span>
+        </span>
+        <span style={cvdS.stat}>
+          <span style={cvdS.statLabel}>Сейчас </span>
+          <span style={{ color: lineColor }}>{lastVal > 0 ? '+' : ''}{(lastVal / 1000).toFixed(1)}K</span>
+        </span>
+        <span style={cvdS.stat}>
+          <span style={cvdS.statLabel}>Изменение </span>
+          <span style={{ color: lineColor }}>{lastVal - cvd[0] > 0 ? '+' : ''}{((lastVal - cvd[0]) / 1000).toFixed(1)}K</span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function getCvdContext(cvd: number[], direction: 'LONG' | 'SHORT', lang: 'ru' | 'en'): string {
+  const last  = cvd[cvd.length - 1]
+  const prev  = cvd[Math.max(0, cvd.length - 10)]
+  const delta = last - prev
+  const trend = delta > 0 ? 'UP' : delta < 0 ? 'DOWN' : 'FLAT'
+  const isLong = direction === 'LONG'
+  const aligned = (isLong && trend === 'UP') || (!isLong && trend === 'DOWN')
+
+  if (lang === 'ru') {
+    if (aligned) {
+      return trend === 'UP'
+        ? 'CVD растёт — покупатели доминируют последние свечи. Совпадает с направлением лонга.'
+        : 'CVD падает — продавцы доминируют последние свечи. Совпадает с направлением шорта.'
+    }
+    return trend === 'UP'
+      ? 'CVD растёт — покупатели активны, но сигнал шорт. Возможное расхождение.'
+      : trend === 'DOWN'
+      ? 'CVD падает — продавцы давят, но сигнал лонг. Возможное расхождение.'
+      : 'CVD в равновесии — нет явного перевеса покупателей или продавцов.'
+  }
+  if (aligned) {
+    return trend === 'UP'
+      ? 'CVD rising — buyers dominating recent candles. Aligned with LONG direction.'
+      : 'CVD falling — sellers dominating recent candles. Aligned with SHORT direction.'
+  }
+  return trend === 'UP'
+    ? 'CVD rising — buyers active, but signal is SHORT. Possible divergence.'
+    : trend === 'DOWN'
+    ? 'CVD falling — sellers pressing, but signal is LONG. Possible divergence.'
+    : 'CVD flat — no clear buyer or seller dominance.'
+}
+
+const cvdS: Record<string, React.CSSProperties> = {
+  wrap: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: 12, padding: '12px 14px',
+  },
+  header: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
+  title: { fontSize: 13, fontWeight: 700, color: '#e6edf3', flex: 0 },
+  trendBadge: {
+    flex: 1, textAlign: 'center',
+    fontSize: 11, fontWeight: 700, padding: '2px 10px',
+    borderRadius: 20, border: '1px solid',
+  },
+  trendArrow: { fontSize: 18, fontWeight: 800, lineHeight: 1 },
+  stats: { display: 'flex', justifyContent: 'space-between', marginTop: 8 },
+  stat: { fontSize: 12 },
+  statLabel: { color: '#6e7681' },
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function TechAnalysis({ signal, onClose }: Props) {
@@ -206,6 +362,8 @@ export function TechAnalysis({ signal, onClose }: Props) {
   const adx = feat.adx as number | undefined
   const volRatio = feat.vol_ratio as number | undefined
   const distEma = feat.dist_ema as number | undefined
+
+  const { cvd, loading: cvdLoading } = useCvd(signal.symbol)
 
   const stratKey = signal.strategy.replace('Strategy', '') as keyof typeof STRATEGY_INFO
   const stratInfo = STRATEGY_INFO[signal.strategy] ?? STRATEGY_INFO[stratKey]
@@ -340,6 +498,29 @@ export function TechAnalysis({ signal, onClose }: Props) {
             )}
           </div>
         )}
+
+        {/* CVD */}
+        <div style={s.section}>
+          <h4 style={s.sectionTitle}>
+            {lang === 'ru' ? '〽 Кумулятивная дельта (CVD)' : '〽 Cumulative Volume Delta (CVD)'}
+          </h4>
+          {cvdLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: '#8b949e', fontSize: 12 }}>
+              Загрузка CVD…
+            </div>
+          ) : cvd ? (
+            <>
+              <CvdSparkline cvd={cvd} direction={signal.direction} />
+              <p style={{ ...s.indicNote, marginTop: 8 }}>
+                {getCvdContext(cvd, signal.direction, lang)}
+              </p>
+            </>
+          ) : (
+            <div style={{ color: '#6e7681', fontSize: 12, padding: '8px 0' }}>
+              {lang === 'ru' ? 'Данные CVD недоступны' : 'CVD data unavailable'}
+            </div>
+          )}
+        </div>
 
         {/* AI votes */}
         {signal.ai_votes.length > 0 && (
