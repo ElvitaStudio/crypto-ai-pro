@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../AuthContext'
 
 const S = {
@@ -34,7 +33,7 @@ const S = {
   },
   subtitle: {
     fontSize: 13, color: '#64748b',
-    textAlign: 'center' as const, marginBottom: 24,
+    textAlign: 'center' as const, marginBottom: 20,
   },
   trialBadge: {
     textAlign: 'center' as const,
@@ -45,14 +44,6 @@ const S = {
     border: '1px solid rgba(34,197,94,0.2)',
     color: '#4ade80',
     fontSize: 13,
-  },
-  divider: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    margin: '20px 0',
-    color: '#475569', fontSize: 12,
-  },
-  dividerLine: {
-    flex: 1, height: 1, background: 'rgba(255,255,255,0.07)',
   },
   label: {
     display: 'block', fontSize: 13, fontWeight: 500,
@@ -99,11 +90,10 @@ const S = {
     lineHeight: 1.6,
   },
   link: { color: '#a78bfa', textDecoration: 'none' },
-  googleWrap: { display: 'flex', justifyContent: 'center' },
 }
 
 export function RegisterPage() {
-  const { register, loginWithGoogle } = useAuth()
+  const { register } = useAuth()
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -134,24 +124,10 @@ export function RegisterPage() {
     }
   }
 
-  const handleGoogle = async (credentialResponse: { credential?: string }) => {
-    if (!credentialResponse.credential) return
-    setError('')
-    setLoading(true)
-    try {
-      await loginWithGoogle(credentialResponse.credential)
-      navigate('/dashboard')
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Ошибка Google входа')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <div style={S.page}>
       <div style={S.card}>
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <div style={S.logoIcon}>📊</div>
           <div style={S.title}>Создать аккаунт</div>
           <div style={S.subtitle}>MarketPulse Pro</div>
@@ -159,23 +135,6 @@ export function RegisterPage() {
 
         <div style={S.trialBadge}>
           ✅ Первые 24 часа — бесплатно. Без карты.
-        </div>
-
-        <div style={S.googleWrap}>
-          <GoogleLogin
-            onSuccess={handleGoogle}
-            onError={() => setError('Ошибка авторизации через Google')}
-            theme="filled_black"
-            shape="rectangular"
-            size="large"
-            text="signup_with"
-          />
-        </div>
-
-        <div style={S.divider}>
-          <div style={S.dividerLine} />
-          или через email
-          <div style={S.dividerLine} />
         </div>
 
         {error && <div style={S.error}>{error}</div>}
@@ -197,6 +156,7 @@ export function RegisterPage() {
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
+            autoFocus
           />
           <label style={S.label}>Пароль</label>
           <input

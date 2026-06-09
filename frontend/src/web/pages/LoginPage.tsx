@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../AuthContext'
 
 const S = {
@@ -21,10 +20,6 @@ const S = {
     borderRadius: 20,
     padding: 36,
   },
-  logo: {
-    textAlign: 'center' as const,
-    marginBottom: 28,
-  },
   logoIcon: {
     width: 48, height: 48,
     background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
@@ -39,14 +34,6 @@ const S = {
   subtitle: {
     fontSize: 13, color: '#64748b',
     textAlign: 'center' as const, marginBottom: 28,
-  },
-  divider: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    margin: '20px 0',
-    color: '#475569', fontSize: 12,
-  },
-  dividerLine: {
-    flex: 1, height: 1, background: 'rgba(255,255,255,0.07)',
   },
   label: {
     display: 'block', fontSize: 13, fontWeight: 500,
@@ -92,16 +79,11 @@ const S = {
     fontSize: 13,
     color: '#64748b',
   },
-  link: {
-    color: '#a78bfa', textDecoration: 'none',
-  },
-  googleWrap: {
-    display: 'flex', justifyContent: 'center',
-  },
+  link: { color: '#a78bfa', textDecoration: 'none' },
 }
 
 export function LoginPage() {
-  const { login, loginWithGoogle } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -122,45 +104,13 @@ export function LoginPage() {
     }
   }
 
-  const handleGoogle = async (credentialResponse: { credential?: string }) => {
-    if (!credentialResponse.credential) return
-    setError('')
-    setLoading(true)
-    try {
-      await loginWithGoogle(credentialResponse.credential)
-      navigate('/dashboard')
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Ошибка Google входа')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <div style={S.page}>
       <div style={S.card}>
-        <div style={S.logo}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={S.logoIcon}>📊</div>
           <div style={S.title}>Войти</div>
           <div style={S.subtitle}>Добро пожаловать обратно</div>
-        </div>
-
-        {/* Google login */}
-        <div style={S.googleWrap}>
-          <GoogleLogin
-            onSuccess={handleGoogle}
-            onError={() => setError('Ошибка авторизации через Google')}
-            theme="filled_black"
-            shape="rectangular"
-            size="large"
-            text="signin_with"
-          />
-        </div>
-
-        <div style={S.divider}>
-          <div style={S.dividerLine} />
-          или через email
-          <div style={S.dividerLine} />
         </div>
 
         {error && <div style={S.error}>{error}</div>}
@@ -174,6 +124,7 @@ export function LoginPage() {
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
+            autoFocus
           />
           <label style={S.label}>Пароль</label>
           <input
