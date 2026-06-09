@@ -6,10 +6,10 @@ JWT utilities and FastAPI dependency for web user authentication.
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from api.database import get_conn
 
@@ -19,17 +19,19 @@ SECRET_KEY   = os.environ.get("JWT_SECRET_KEY", "CHANGE_ME_USE_STRONG_SECRET_IN_
 ALGORITHM    = os.environ.get("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))  # 7 days
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-_bearer      = HTTPBearer(auto_error=False)
+_bearer = HTTPBearer(auto_error=False)
 
 # ── Password helpers ──────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except Exception:
+        return False
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
