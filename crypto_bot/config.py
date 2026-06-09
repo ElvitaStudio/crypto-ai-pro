@@ -29,10 +29,14 @@ EXCHANGE_TYPE = "future"          # Binance Futures
 RATE_LIMIT = True
 
 # ============================================================
-#  TELEGRAM BOTS
-#  Map strategy name → (token, signal_channel, results_channel)
-#  results_channel can be None if strategy doesn't track trades
+#  UNIFIED TELEGRAM CHANNEL
+#  All strategies send to one channel in a consistent format.
 # ============================================================
+UNIFIED_BOT_TOKEN    = os.environ.get("UNIFIED_BOT_TOKEN",    "7615835464:AAEQIMdf3mD9ym0TyO3ZtZ8p1UD8VQrFSYs")
+UNIFIED_CHANNEL      = os.environ.get("UNIFIED_CHANNEL",      "-1002728849341")
+UNIFIED_RESULTS_CHANNEL = os.environ.get("UNIFIED_RESULTS_CHANNEL", "-1002728849341")  # same channel for TP/SL
+
+# ── Legacy per-strategy config (kept for reference, no longer used by runner)
 TELEGRAM = {
     "volume_level": {
         "token": "7550542378:AAERLC0CFYXYq2ivK1yPuMktFTtxA3AO5Zg",
