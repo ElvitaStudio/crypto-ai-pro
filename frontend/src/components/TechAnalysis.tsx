@@ -197,21 +197,27 @@ function getVolContext(vol: number, lang: 'ru' | 'en'): string {
 
 const BASE_URL = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_URL ?? ''
 
+/** Normalize symbol to base ticker: "TAO/USDT" → "TAO", "TAOUSDT" → "TAO" */
+function toBaseTicker(symbol: string): string {
+  return symbol.replace(/\/USDT$/i, '').replace(/USDT$/i, '')
+}
+
 /** Fetch candles and compute cumulative delta from buy/sell volume. */
 function useCvd(symbol: string, timeframe = '15m', limit = 60) {
   const [candles, setCandles] = useState<Candle[] | null>(null)
   const [loading, setLoading] = useState(true)
+  const base = toBaseTicker(symbol)
 
   useEffect(() => {
     setLoading(true)
-    fetch(`${BASE_URL}/api/chart/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=${limit}`)
+    fetch(`${BASE_URL}/api/chart/${encodeURIComponent(base)}?timeframe=${timeframe}&limit=${limit}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.candles) setCandles(data.candles)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [symbol, timeframe, limit])
+  }, [base, timeframe, limit])
 
   if (!candles || candles.length === 0) return { cvd: null, loading }
 
