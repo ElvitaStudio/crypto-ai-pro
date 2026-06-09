@@ -209,7 +209,7 @@ def council_review(signal: dict) -> CouncilVerdict:
 
     passed = sum(1 for v in votes if v.approved)
     total = len(votes)
-    approved = passed == total  # unanimous: ALL models must approve
+    approved = passed >= 2  # at least 2/3 models must approve
 
     summary = f"{passed}/{total} models approved"
     return CouncilVerdict(approved=approved, votes=votes, summary=summary)

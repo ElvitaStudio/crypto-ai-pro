@@ -17,19 +17,19 @@ from core.exchange import fetch_ohlcv
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-COOLDOWN_SEC:      int   = 6 * 3600   # 6 h per symbol (was 4 h)
-MIN_RR:            float = 3.0        # minimum R:R (was 2.0)
+COOLDOWN_SEC:      int   = 4 * 3600   # 4 h per symbol
+MIN_RR:            float = 2.5        # minimum R:R
 HTF_1H:            str   = "1h"
 HTF_4H:            str   = "4h"
 HTF_EMA_LEN:       int   = 50
-MIN_QUALITY_SCORE: int   = 4          # need ≥ 4 out of 6 points
+MIN_QUALITY_SCORE: int   = 3          # need ≥ 3 out of 6 points
 
 # Quality score thresholds
-ADX_TREND_MIN:    float = 25.0   # strong trend
-RSI_LONG_MAX:     float = 58.0   # don't buy near overbought
-RSI_SHORT_MIN:    float = 42.0   # don't sell near oversold
+ADX_TREND_MIN:    float = 20.0   # moderate trend
+RSI_LONG_MAX:     float = 65.0   # don't buy overbought
+RSI_SHORT_MIN:    float = 35.0   # don't sell oversold
 VOL_RATIO_MIN:    float = 1.5    # above-average volume
-RR_BONUS_MIN:     float = 4.0    # bonus point for excellent R:R
+RR_BONUS_MIN:     float = 3.5    # bonus point for excellent R:R
 
 # ── Cooldown store ────────────────────────────────────────────────────────────
 
@@ -184,14 +184,8 @@ def check(signal: dict) -> tuple[bool, str]:
     if trend_1h == "UP" and direction == "SHORT":
         return False, f"1h HTF trend UP — skipping SHORT on {symbol}"
 
-    # ── 4. 4h HTF trend (used in quality score) ──────────────────────────────
+    # ── 4. 4h HTF trend (soft — affects quality score only, no hard block) ───
     trend_4h = _htf_trend(ccxt_sym, HTF_4H)
-
-    # Hard block: 4h strongly opposes direction
-    if trend_4h == "DOWN" and direction == "LONG":
-        return False, f"4h HTF trend DOWN — skipping LONG on {symbol}"
-    if trend_4h == "UP" and direction == "SHORT":
-        return False, f"4h HTF trend UP — skipping SHORT on {symbol}"
 
     # ── 5. Quality Score ─────────────────────────────────────────────────────
     score, details = _quality_score(signal, trend_4h, rr)
