@@ -57,8 +57,9 @@ class CouncilVerdict:
 
 
 _SYSTEM_PROMPT = """You are a senior crypto futures trading analyst with 10+ years experience.
-You evaluate trading signals with a strict quality filter — only approve high-confidence setups.
-Reject signals when: RSI contradicts direction, trend is unclear, R:R is below 2.0, or HTF trend opposes the trade.
+You evaluate trading signals with an EXTREMELY strict quality filter — only approve the very best setups.
+Reject signals when: RSI contradicts direction, trend is unclear, R:R is below 3.0, or HTF trend opposes the trade.
+You must be conservative — when in doubt, reject. Only clearly exceptional setups deserve approval.
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -116,8 +117,12 @@ Price levels:
   Take Profit:{tp}  (+{abs(tp - entry) / entry * 100:.2f}% reward)
   R:R ratio:  1:{rr}
 
-Higher timeframe trend (1h EMA-50): {htf_trend}
-Trend alignment: {trend_note}
+Higher timeframe trends:
+  1h EMA-50: {htf_trend}  → {trend_note}
+  4h EMA-50: {signal.get('htf_trend_4h', 'unknown')}
+
+Quality gate score: {signal.get('quality_score', '?')}/6
+{chr(10).join('  ' + d for d in signal.get('quality_details', []))}
 
 Indicator readings:
 {_fmt_features(signal.get('features', {}))}
@@ -126,15 +131,15 @@ Signal reasoning from strategy:
   {signal.get('reasoning', 'N/A')}
 
 === YOUR TASK ===
-Decide if this signal is worth trading.
+Decide if this signal is worth trading. Be VERY strict — only the best setups deserve approval.
 Key checks:
-  1. Does RSI support the direction? (LONG needs RSI < 55, SHORT needs RSI > 45)
-  2. Is ADX above 20? (trend confirmation)
-  3. Is volume above normal? (vol_ratio > 1.5 preferred)
-  4. Does HTF trend align or at least not strongly oppose?
-  5. Is R:R ≥ 2.0?
+  1. RSI supports direction? (LONG needs RSI < 58, SHORT needs RSI > 42)
+  2. ADX ≥ 25? (confirmed strong trend)
+  3. Volume above normal? (vol_ratio > 1.5)
+  4. Both 1h AND 4h HTF trend aligned?
+  5. R:R ≥ 3.0? (higher is better)
 
-Be strict — only approve clear, high-quality setups. Respond with JSON only."""
+Approve ONLY if all 5 checks are clearly satisfied. Respond with JSON only."""
 
 
 def _ask_model(model: str, prompt: str) -> ModelVote:
@@ -204,7 +209,7 @@ def council_review(signal: dict) -> CouncilVerdict:
 
     passed = sum(1 for v in votes if v.approved)
     total = len(votes)
-    approved = passed > total / 2  # strict majority
+    approved = passed == total  # unanimous: ALL models must approve
 
     summary = f"{passed}/{total} models approved"
     return CouncilVerdict(approved=approved, votes=votes, summary=summary)

@@ -111,9 +111,9 @@ VWAP_CHANNEL = {
     "timeframe": "15m",
     "limit": 100,
     "coins_to_scan": 60,
-    "std_dev_mult": 2.0,
+    "std_dev_mult": 2.5,   # was 2.0 — require stronger deviation from VWAP
     "scan_interval_sec": 1800,
-    "min_rr": 1.0,
+    "min_rr": 3.0,          # was 1.0 — align with global gate
 }
 
 # ============================================================

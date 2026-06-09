@@ -135,6 +135,8 @@ class BotRunner:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    # TitanFractal disabled: 14.7% win rate (19W/110L) — too many losses.
+    # Re-enable only after strategy is reworked and backtested.
     runners = [
         BotRunner(
             name="VolumeLevel",
@@ -155,13 +157,6 @@ def main() -> None:
             strategy=VwapChannelStrategy(),
             cfg=VWAP_CHANNEL,
             tg_cfg=TELEGRAM["vwap_channel"],
-            track=False,
-        ),
-        BotRunner(
-            name="TitanFractal",
-            strategy=FractalStrategy(),
-            cfg=FRACTAL,
-            tg_cfg=TELEGRAM["fractal"],
             track=False,
         ),
     ]
