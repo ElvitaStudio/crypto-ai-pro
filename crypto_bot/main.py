@@ -49,7 +49,6 @@ class BotRunner:
             self.tracker = Tracker(cfg["trades_file"], cfg["db_file"])
 
     def run(self) -> None:
-        tg.notify(UNIFIED_BOT_TOKEN, UNIFIED_CHANNEL, f"🤖 {self.name} запущен!")
         print(f"[{self.name}] started")
 
         coins     = ex.fetch_top_coins(self.cfg["coins_to_scan"])
