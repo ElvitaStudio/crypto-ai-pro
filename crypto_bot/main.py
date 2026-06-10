@@ -94,8 +94,11 @@ class BotRunner:
                         continue
 
                     # ── Build unified message ─────────────────────────────
-                    msg  = format_signal(sig)
-                    msg += f"\n\n{verdict.format_badge()}{verdict.format_detail()}"
+                    msg = format_signal(sig)
+                    badge  = verdict.format_badge()
+                    detail = verdict.format_detail()
+                    if badge or detail:
+                        msg += f"\n\n{badge}{detail}"
 
                     tg.notify(UNIFIED_BOT_TOKEN, UNIFIED_CHANNEL, msg, sig.get("chart_buf"), sig["symbol"])
                     print(f"[{self.name}] SIGNAL {sig['symbol']} {sig['direction']} | {verdict.summary}")

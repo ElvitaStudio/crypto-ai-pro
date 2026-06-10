@@ -8,21 +8,34 @@ import { Pro } from './pages/Pro'
 import { Guide } from './pages/Guide'
 import { Paywall, TrialBanner } from './components/Paywall'
 import { ExpiryPopup } from './components/ExpiryPopup'
+import { Screener } from './components/Screener'
 import { useAccess } from './hooks/useAccess'
 
 export function App() {
-  const [page, setPage] = useState<Page>('feed')
+  const [page, setPage] = useState<Page>('screener')
   const [showPaywall, setShowPaywall] = useState(false)
   const access = useAccess()
   const { t }  = useLang()
 
   const NAV: { id: Page; label: string; icon: string; pro?: boolean }[] = [
-    { id: 'feed',     label: t('navSignals'),  icon: '📡'  },
-    { id: 'stats',    label: t('navStats'),    icon: '📈'  },
-    { id: 'pro',      label: t('navPro'),      icon: '💎', pro: true },
-    { id: 'guide',    label: t('navGuide'),    icon: '📖'  },
-    { id: 'settings', label: t('navSettings'), icon: '⚙️'  },
+    { id: 'screener',  label: 'Скринер',        icon: '🔭'  },
+    { id: 'feed',      label: t('navSignals'),   icon: '📡'  },
+    { id: 'stats',     label: t('navStats'),     icon: '📈'  },
+    { id: 'pro',       label: t('navPro'),       icon: '💎', pro: true },
+    { id: 'settings',  label: t('navSettings'),  icon: '⚙️'  },
   ]
+
+  function handleScreenerChart(symbol: string) {
+    // Navigate to feed — TODO: open LiveChart directly for this symbol
+    void symbol
+    setPage('feed')
+  }
+
+  function handleScreenerAnalysis(symbol: string) {
+    // Navigate to feed — TODO: open TechAnalysis directly for this symbol
+    void symbol
+    setPage('feed')
+  }
 
   // Block access when expired
   if (access.status === 'expired' || showPaywall) {
@@ -48,6 +61,14 @@ export function App() {
       )}
 
       <div style={styles.content}>
+        {page === 'screener'  && (
+          <Screener
+            accessStatus={access.status}
+            onProClick={() => setPage('pro')}
+            onOpenChart={handleScreenerChart}
+            onOpenAnalysis={handleScreenerAnalysis}
+          />
+        )}
         {page === 'feed'     && <Dashboard accessStatus={access.status} onProClick={() => setPage('pro')} />}
         {page === 'stats'    && <Stats />}
         {page === 'settings' && <Settings />}

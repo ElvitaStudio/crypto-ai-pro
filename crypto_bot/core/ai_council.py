@@ -40,14 +40,18 @@ class CouncilVerdict:
     summary: str
 
     def format_badge(self) -> str:
-        """Returns a compact badge like: AI: ✅✅❌ (2/3)"""
+        """Returns a compact badge like: AI: ✅✅❌ (2/3). Empty string when no votes."""
+        if not self.votes:
+            return ""
         icons = "".join("✅" if v.approved else "❌" for v in self.votes)
         passed = sum(1 for v in self.votes if v.approved)
         total = len(self.votes)
         return f"AI: {icons} ({passed}/{total})"
 
     def format_detail(self) -> str:
-        """Returns a detailed breakdown for the Telegram message."""
+        """Returns a detailed breakdown for the Telegram message. Empty when no votes."""
+        if not self.votes:
+            return ""
         lines = ["", "🤖 *AI Совет:*"]
         for v in self.votes:
             icon = "✅" if v.approved else "❌"

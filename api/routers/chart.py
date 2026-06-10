@@ -226,7 +226,97 @@ def _zone_from_group(group: list[VolumeProfileBar]) -> Zone:
     )
 
 
-# ── Endpoint ──────────────────────────────────────────────────────────────────
+# ── Screener endpoint ─────────────────────────────────────────────────────────
+# NOTE: must be registered BEFORE /{symbol} to avoid "screener" matching as symbol
+
+class ScreenerItem(BaseModel):
+    symbol: str
+    price: float
+    change24h: float        # percent
+    high24h: float
+    low24h: float
+    volume24h: float
+    rsi: float | None
+    adx: float | None
+    vol_ratio: float | None
+    trend1h: str            # UP / DOWN / NEUTRAL
+
+
+DEFAULT_SCREENER_SYMBOLS = [
+    "BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT",
+    "XRP/USDT", "DOGE/USDT", "ADA/USDT",
+]
+
+
+def _screener_item(ccxt_sym: str) -> ScreenerItem | None:
+    try:
+        ticker = _exchange.fetch_ticker(ccxt_sym)
+        price      = float(ticker["last"] or 0)
+        change24h  = float(ticker["percentage"] or 0)
+        high24h    = float(ticker["high"] or price)
+        low24h     = float(ticker["low"] or price)
+        volume24h  = float(ticker["quoteVolume"] or 0)
+
+        df = _fetch_ohlcv(ccxt_sym, "1h", 60)
+
+        import pandas_ta as pta
+        rsi_s = pta.rsi(df["close"], length=14)
+        adx_s = pta.adx(df["high"], df["low"], df["close"])
+        rsi     = round(float(rsi_s.iloc[-1]), 1) if rsi_s is not None and not rsi_s.isna().all() else None
+        adx_val = round(float(adx_s["ADX_14"].iloc[-1]), 1) if adx_s is not None else None
+
+        vol_sma   = df["volume"].rolling(20).mean().iloc[-1]
+        vol_ratio = round(float(df["volume"].iloc[-1] / vol_sma), 2) if vol_sma else None
+
+        ema50 = pta.ema(df["close"], length=50)
+        if ema50 is not None and not ema50.isna().all():
+            last_close = float(df["close"].iloc[-1])
+            last_ema   = float(ema50.iloc[-1])
+            if last_close > last_ema * 1.002:
+                trend1h = "UP"
+            elif last_close < last_ema * 0.998:
+                trend1h = "DOWN"
+            else:
+                trend1h = "NEUTRAL"
+        else:
+            trend1h = "NEUTRAL"
+
+        base = ccxt_sym.replace("/USDT", "")
+        return ScreenerItem(
+            symbol=base,
+            price=price,
+            change24h=round(change24h, 2),
+            high24h=high24h,
+            low24h=low24h,
+            volume24h=round(volume24h / 1_000_000, 2),  # millions
+            rsi=rsi,
+            adx=adx_val,
+            vol_ratio=vol_ratio,
+            trend1h=trend1h,
+        )
+    except Exception:
+        return None
+
+
+@router.get("/screener/data", response_model=list[ScreenerItem])
+def get_screener(
+    symbols: str = Query(
+        ",".join(s.replace("/USDT", "") for s in DEFAULT_SCREENER_SYMBOLS),
+        description="Comma-separated base tickers, e.g. BTC,ETH,SOL",
+    ),
+):
+    """Return market snapshot for multiple symbols (price, RSI, ADX, trend)."""
+    import concurrent.futures
+    tickers = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    ccxt_symbols = [f"{t}/USDT" for t in tickers]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as pool:
+        results = list(pool.map(_screener_item, ccxt_symbols))
+
+    return [r for r in results if r is not None]
+
+
+# ── Chart endpoint ────────────────────────────────────────────────────────────
 
 @router.get("/{symbol}", response_model=ChartData)
 def get_chart(
@@ -293,3 +383,4 @@ def get_chart(
         vah=vah,
         val=val,
     )
+
