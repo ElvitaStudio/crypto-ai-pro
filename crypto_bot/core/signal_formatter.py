@@ -31,6 +31,10 @@ _STRATEGY_META: dict[str, dict] = {
         "icon": "🏛",
         "label": "ТИТАН ФРАКТАЛ",
     },
+    "CvdVwap": {
+        "icon": "🌊",
+        "label": "CVD + VWAP",
+    },
 }
 
 _DEFAULT_META = {"icon": "📡", "label": "СИГНАЛ"}

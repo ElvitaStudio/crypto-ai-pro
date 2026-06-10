@@ -14,7 +14,6 @@ from datetime import datetime
 
 from config import UNIFIED_BOT_TOKEN, UNIFIED_CHANNEL, UNIFIED_RESULTS_CHANNEL
 from config import TOP_COINS_REFRESH_INTERVAL
-from config import VOLUME_LEVEL, MULTI, VWAP_CHANNEL
 from core.signal_formatter import format_signal, format_result
 
 from core import exchange as ex
@@ -24,125 +23,128 @@ from core.ai_council import council_review
 from core.signal_db import save_signal, update_signal_result
 from core import signal_gate
 
-from strategies.volume_level import VolumeLevelStrategy
-from strategies.multi import MultiStrategy
-from strategies.vwap_channel import VwapChannelStrategy
+from strategies.cvd_vwap import generate_signal as cvd_vwap_signal
 
 
 
-# ── Bot runner ────────────────────────────────────────────────────────────────
+# ── CvdVwap runner (dual-timeframe — needs custom scan loop) ─────────────────
 
-class BotRunner:
-    def __init__(
-        self,
-        name: str,
-        strategy,
-        cfg: dict,
-        track: bool = False,
-    ) -> None:
-        self.name     = name
-        self.strategy = strategy
-        self.cfg      = cfg
-        self.tracker: Tracker | None = None
+class CvdVwapRunner:
+    """
+    Dedicated runner for CvdVwap strategy.
+    Fetches 15m + 1h OHLCV for each coin and calls generate_signal().
+    """
 
-        if track and "db_file" in cfg and "trades_file" in cfg:
-            self.tracker = Tracker(cfg["trades_file"], cfg["db_file"])
+    NAME = "CvdVwap"
+    SCAN_INTERVAL = 60          # seconds between scans
+    COINS_TO_SCAN = 40
+    CANDLES_15M   = 100
+    CANDLES_1H    = 60
+
+    def __init__(self) -> None:
+        self.tracker = Tracker("data/trades_cvdvwap.json", "data/signals.db")
+
+    def _fetch_df(self, symbol: str, timeframe: str, limit: int):
+        import ccxt
+        import pandas as pd
+        exchange = ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "future"}, "timeout": 30_000})
+        raw = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        df  = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        return df
 
     def run(self) -> None:
-        print(f"[{self.name}] started")
-
-        coins     = ex.fetch_top_coins(self.cfg["coins_to_scan"])
+        print(f"[{self.NAME}] started")
+        coins     = ex.fetch_top_coins(self.COINS_TO_SCAN)
         iteration = 0
 
         while True:
             try:
                 now = datetime.now().strftime("%H:%M:%S")
-                print(f"[{self.name}] scan {now} | coins={len(coins)}")
+                print(f"[{self.NAME}] scan {now} | coins={len(coins)}")
 
-                # ── Check open trades, send TP/SL results ─────────────────
-                if self.tracker:
-                    def _on_close(trade, status, msg, _name=self.name):
-                        pnl = ((trade.tp - trade.entry) / trade.entry * 100
-                               if status == "WIN" else
-                               (trade.entry - trade.sl) / trade.entry * -100)
-                        result_msg = format_result(trade.symbol, _name, status, round(pnl, 2))
-                        tg.notify(UNIFIED_BOT_TOKEN, UNIFIED_RESULTS_CHANNEL, result_msg)
-                        update_signal_result(trade.symbol, _name, status, round(pnl, 2))
+                # Check open trades
+                def _on_close(trade, status, _=None):
+                    pnl = ((trade.tp - trade.entry) / trade.entry * 100
+                           if status == "WIN" else
+                           (trade.entry - trade.sl) / trade.entry * -100)
+                    result_msg = format_result(trade.symbol, self.NAME, status, round(pnl, 2))
+                    tg.notify(UNIFIED_BOT_TOKEN, UNIFIED_RESULTS_CHANNEL, result_msg)
+                    update_signal_result(trade.symbol, self.NAME, status, round(pnl, 2))
 
-                    self.tracker.check_all(
-                        fetch_price=lambda sym: ex.fetch_ticker(sym + "/USDT" if "/" not in sym else sym)["last"],
-                        on_close=_on_close,
-                    )
+                self.tracker.check_all(
+                    fetch_price=lambda sym: ex.fetch_ticker(sym + "/USDT" if "/" not in sym else sym)["last"],
+                    on_close=_on_close,
+                )
 
-                signals = self.strategy.run_scan(coins)
-                print(f"[{self.name}] strategy found {len(signals)} raw signal(s)")
-                for sig in signals:
-                    # Skip if already tracking this symbol
-                    if self.tracker and self.tracker.is_active(sig["symbol"]):
+                signals_found = 0
+                for coin in coins:
+                    symbol = coin if "/" in coin else f"{coin}/USDT"
+                    if self.tracker.is_active(symbol):
+                        continue
+                    try:
+                        df_15m = self._fetch_df(symbol, "15m", self.CANDLES_15M)
+                        df_1h  = self._fetch_df(symbol, "1h",  self.CANDLES_1H)
+                        sig    = cvd_vwap_signal(symbol, df_15m, df_1h)
+                    except Exception as e:
+                        print(f"[{self.NAME}] fetch error {symbol}: {e}")
                         continue
 
-                    # ── Quality gate: cooldown + R:R + HTF trends + score ──
+                    if sig is None:
+                        continue
+
+                    signals_found += 1
                     passed, reason = signal_gate.check(sig)
                     if not passed:
-                        print(f"[{self.name}] GATE BLOCKED {sig['symbol']} — {reason}")
+                        print(f"[{self.NAME}] GATE BLOCKED {symbol} — {reason}")
                         continue
 
-                    # ── AI Council: unanimous 3/3 ─────────────────────────
                     verdict = council_review(sig)
                     if not verdict.approved:
-                        print(f"[{self.name}] AI BLOCKED {sig['symbol']} — {verdict.summary}")
+                        print(f"[{self.NAME}] AI BLOCKED {symbol} — {verdict.summary}")
                         continue
 
-                    # ── Build unified message ─────────────────────────────
-                    msg = format_signal(sig)
+                    msg   = format_signal(sig)
                     badge  = verdict.format_badge()
                     detail = verdict.format_detail()
                     if badge or detail:
                         msg += f"\n\n{badge}{detail}"
 
-                    tg.notify(UNIFIED_BOT_TOKEN, UNIFIED_CHANNEL, msg, sig.get("chart_buf"), sig["symbol"])
-                    print(f"[{self.name}] SIGNAL {sig['symbol']} {sig['direction']} | {verdict.summary}")
+                    tg.notify(UNIFIED_BOT_TOKEN, UNIFIED_CHANNEL, msg, None, symbol)
+                    print(f"[{self.NAME}] SIGNAL {symbol} {sig['direction']} | {verdict.summary}")
 
-                    save_signal(self.name, sig, verdict)
-                    signal_gate.mark_sent(sig["symbol"])
+                    save_signal(self.NAME, sig, verdict)
+                    signal_gate.mark_sent(symbol)
 
-                    if self.tracker:
-                        self.tracker.add(Trade(
-                            symbol=sig["symbol"],
-                            side=sig["direction"],
-                            entry=sig["entry"],
-                            tp=sig["tp"],
-                            sl=sig["sl"],
-                            features=sig.get("features", {}),
-                        ))
+                    self.tracker.add(Trade(
+                        symbol=symbol,
+                        side=sig["direction"],
+                        entry=sig["entry"],
+                        tp=sig["tp"],
+                        sl=sig["sl"],
+                        features=sig.get("features", {}),
+                    ))
+
+                print(f"[{self.NAME}] raw signals found: {signals_found}")
 
                 iteration += 1
                 if iteration % TOP_COINS_REFRESH_INTERVAL == 0:
-                    coins = ex.fetch_top_coins(self.cfg["coins_to_scan"])
-                    print(f"[{self.name}] coin list refreshed")
+                    coins = ex.fetch_top_coins(self.COINS_TO_SCAN)
 
-                time.sleep(self.cfg["scan_interval_sec"])
+                time.sleep(self.SCAN_INTERVAL)
 
             except KeyboardInterrupt:
-                print(f"[{self.name}] stopped")
+                print(f"[{self.NAME}] stopped")
                 break
             except Exception as e:
-                print(f"[{self.name}] loop error: {e}")
+                print(f"[{self.NAME}] loop error: {e}")
                 time.sleep(30)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    # TitanFractal disabled: 14.7% win rate (19W/110L) — too many losses.
-    # Re-enable only after strategy is reworked and backtested.
-    runners = [
-        BotRunner(name="VolumeLevel", strategy=VolumeLevelStrategy(), cfg=VOLUME_LEVEL, track=True),
-        BotRunner(name="Multi",       strategy=MultiStrategy(),        cfg=MULTI,        track=False),
-        BotRunner(name="NexusVWAP",   strategy=VwapChannelStrategy(),  cfg=VWAP_CHANNEL, track=False),
-    ]
-
-    threads = [threading.Thread(target=r.run, daemon=True, name=r.name) for r in runners]
+    cvd_runner = CvdVwapRunner()
+    threads = [threading.Thread(target=cvd_runner.run, daemon=True, name="CvdVwap")]
     for i, t in enumerate(threads):
         t.start()
         print(f"Thread started: {t.name}")
