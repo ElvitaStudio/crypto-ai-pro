@@ -16,9 +16,9 @@ import pandas as pd
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-VWAP_ZONE_PCT     = 0.004   # price within 0.4% of VWAP → "at VWAP"
-DIVERGENCE_WINDOW = 12      # candles to look back for divergence
-MIN_CVD_SWING_PCT = 0.005   # minimum CVD swing to count as divergence
+VWAP_ZONE_PCT     = 0.008   # price within 0.8% of VWAP → "at VWAP"
+DIVERGENCE_WINDOW = 16      # candles to look back for divergence
+MIN_CVD_SWING_PCT = 0.02    # minimum relative CVD swing (2% of range)
 RSI_LONG_MAX      = 60.0
 RSI_SHORT_MIN     = 40.0
 MIN_ADX           = 18.0    # some trend strength required
@@ -121,38 +121,43 @@ def _detect_divergence(df: pd.DataFrame, cvd: pd.Series) -> str:
     """
     Returns 'BULLISH', 'BEARISH', or 'NONE'.
 
-    Bullish  — price LL but CVD HL (buyers absorbing sell pressure)
-    Bearish  — price HH but CVD LH (sellers absorbing buy pressure)
+    Splits the window into two halves and compares extremes:
+    Bullish — second half price min < first half (lower low)
+              BUT second half CVD min > first half (higher low)
+    Bearish — second half price max > first half (higher high)
+              BUT second half CVD max < first half (lower high)
     """
     window = DIVERGENCE_WINDOW
-    price_slice = df["close"].iloc[-window:]
-    cvd_slice   = cvd.iloc[-window:]
+    half   = window // 2
 
-    price_min_idx = int(price_slice.argmin())
-    price_max_idx = int(price_slice.argmax())
-    cvd_min_idx   = int(cvd_slice.argmin())
-    cvd_max_idx   = int(cvd_slice.argmax())
+    price = df["close"].iloc[-window:]
+    cvd_w = cvd.iloc[-window:]
 
-    # Bullish: price low is at the end, CVD low is earlier (or higher)
-    price_low  = float(price_slice.iloc[-1])
-    price_prev = float(price_slice.iloc[price_min_idx])
-    cvd_low    = float(cvd_slice.iloc[-1])
-    cvd_prev   = float(cvd_slice.iloc[cvd_min_idx])
+    # Split into first and second half
+    p_first  = price.iloc[:half]
+    p_second = price.iloc[half:]
+    c_first  = cvd_w.iloc[:half]
+    c_second = cvd_w.iloc[half:]
 
-    cvd_range = float(cvd.iloc[-window:].max() - cvd.iloc[-window:].min()) + 1e-10
+    cvd_range = float(cvd_w.max() - cvd_w.min()) + 1e-10
+    min_swing = cvd_range * MIN_CVD_SWING_PCT
 
-    if (price_low <= price_prev * 1.002 and          # price near or at new low
-            cvd_low > cvd_prev + cvd_range * MIN_CVD_SWING_PCT):  # CVD higher low
+    # Bullish divergence: price made lower low but CVD made higher low
+    p_low_1 = float(p_first.min())
+    p_low_2 = float(p_second.min())
+    c_low_1 = float(c_first.min())
+    c_low_2 = float(c_second.min())
+
+    if p_low_2 < p_low_1 * 1.001 and c_low_2 > c_low_1 + min_swing:
         return "BULLISH"
 
-    # Bearish: price high is at the end, CVD high is earlier (or lower)
-    price_high  = float(price_slice.iloc[-1])
-    price_phigh = float(price_slice.iloc[price_max_idx])
-    cvd_high    = float(cvd_slice.iloc[-1])
-    cvd_phigh   = float(cvd_slice.iloc[cvd_max_idx])
+    # Bearish divergence: price made higher high but CVD made lower high
+    p_hi_1 = float(p_first.max())
+    p_hi_2 = float(p_second.max())
+    c_hi_1 = float(c_first.max())
+    c_hi_2 = float(c_second.max())
 
-    if (price_high >= price_phigh * 0.998 and        # price near or at new high
-            cvd_high < cvd_phigh - cvd_range * MIN_CVD_SWING_PCT):  # CVD lower high
+    if p_hi_2 > p_hi_1 * 0.999 and c_hi_2 < c_hi_1 - min_swing:
         return "BEARISH"
 
     return "NONE"
@@ -204,13 +209,14 @@ def generate_signal(
     reasoning = ""
 
     # ── LONG conditions ───────────────────────────────────────────────────────
-    long_at_vwap  = last_close <= last_vwap * (1 + VWAP_ZONE_PCT)
-    long_cvd_up   = cvd_slope_norm > 0
-    long_div      = divergence == "BULLISH"
-    long_rsi      = rsi < RSI_LONG_MAX
-    long_htf      = trend_1h in ("UP", "NEUTRAL")
+    # Note: 1h trend is NOT a hard block here — Gate scores it as quality factor.
+    # CvdVwap is a mean-reversion strategy: price overshoots VWAP then returns.
+    long_at_vwap = last_close <= last_vwap * (1 + VWAP_ZONE_PCT)
+    long_cvd_up  = cvd_slope_norm > 0
+    long_div     = divergence == "BULLISH"
+    long_rsi     = rsi < RSI_LONG_MAX
 
-    if long_at_vwap and long_cvd_up and long_div and long_rsi and long_htf:
+    if long_at_vwap and long_cvd_up and long_div and long_rsi:
         direction = "LONG"
         reasoning = (f"VWAP bounce LONG. CVD bullish divergence. "
                      f"RSI={rsi:.1f}, ADX={adx:.1f}, 1h={trend_1h}")
@@ -220,9 +226,8 @@ def generate_signal(
     short_cvd_down = cvd_slope_norm < 0
     short_div      = divergence == "BEARISH"
     short_rsi      = rsi > RSI_SHORT_MIN
-    short_htf      = trend_1h in ("DOWN", "NEUTRAL")
 
-    if short_at_vwap and short_cvd_down and short_div and short_rsi and short_htf:
+    if short_at_vwap and short_cvd_down and short_div and short_rsi:
         direction = "SHORT"
         reasoning = (f"VWAP bounce SHORT. CVD bearish divergence. "
                      f"RSI={rsi:.1f}, ADX={adx:.1f}, 1h={trend_1h}")
@@ -232,19 +237,19 @@ def generate_signal(
 
     # ── Stop / Take ───────────────────────────────────────────────────────────
     if direction == "LONG":
-        sl = _swing_low(df_15m["low"], SWING_WINDOW) * 0.9995   # tiny buffer
-        tp = last_vwap_up                                         # VWAP +1σ
-        if sl >= last_close:
-            sl = last_close * 0.985                               # fallback 1.5%
-        if tp <= last_close:
-            tp = last_close * 1.03
+        sl_swing = _swing_low(df_15m["low"], SWING_WINDOW) * 0.9995
+        # Clamp: stop must be 0.5%–3% below entry
+        sl = max(last_close * 0.97, min(sl_swing, last_close * 0.995))
+        tp = last_vwap_up                                          # VWAP +1σ
+        if tp <= last_close * 1.005:
+            tp = last_close * 1.02                                 # fallback 2%
     else:
-        sl = _swing_high(df_15m["high"], SWING_WINDOW) * 1.0005
-        tp = last_vwap_dn                                         # VWAP -1σ
-        if sl <= last_close:
-            sl = last_close * 1.015
-        if tp >= last_close:
-            tp = last_close * 0.97
+        sl_swing = _swing_high(df_15m["high"], SWING_WINDOW) * 1.0005
+        # Clamp: stop must be 0.5%–3% above entry
+        sl = min(last_close * 1.03, max(sl_swing, last_close * 1.005))
+        tp = last_vwap_dn                                          # VWAP -1σ
+        if tp >= last_close * 0.995:
+            tp = last_close * 0.98                                 # fallback 2%
 
     risk   = abs(last_close - sl)
     reward = abs(tp - last_close)

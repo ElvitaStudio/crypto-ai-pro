@@ -78,7 +78,10 @@ class CvdVwapRunner:
 
                 signals_found = 0
                 for coin in coins:
-                    symbol = coin if "/" in coin else f"{coin}/USDT"
+                    # Normalise: "BTC/USDT" or "BTC" → "BTC/USDT"
+                    symbol = coin.split(":")[0]   # strip :USDT suffix if present
+                    if "/" not in symbol:
+                        symbol = f"{symbol}/USDT"
                     if self.tracker.is_active(symbol):
                         continue
                     try:

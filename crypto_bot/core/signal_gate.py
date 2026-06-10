@@ -177,14 +177,10 @@ def check(signal: dict) -> tuple[bool, str]:
     if rr < MIN_RR:
         return False, f"R:R {rr:.2f} < {MIN_RR}"
 
-    # ── 3. 1h HTF trend alignment (hard filter) ──────────────────────────────
+    # ── 3. HTF trends (both soft — affect quality score, no hard block) ────────
+    # CvdVwap is mean-reversion: price returns to VWAP regardless of trend direction.
+    # Hard trend blocks were killing all signals in trending markets.
     trend_1h = _htf_trend(ccxt_sym, HTF_1H)
-    if trend_1h == "DOWN" and direction == "LONG":
-        return False, f"1h HTF trend DOWN — skipping LONG on {symbol}"
-    if trend_1h == "UP" and direction == "SHORT":
-        return False, f"1h HTF trend UP — skipping SHORT on {symbol}"
-
-    # ── 4. 4h HTF trend (soft — affects quality score only, no hard block) ───
     trend_4h = _htf_trend(ccxt_sym, HTF_4H)
 
     # ── 5. Quality Score ─────────────────────────────────────────────────────
