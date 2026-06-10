@@ -140,9 +140,11 @@ def main() -> None:
     ]
 
     threads = [threading.Thread(target=r.run, daemon=True, name=r.name) for r in runners]
-    for t in threads:
+    for i, t in enumerate(threads):
         t.start()
         print(f"Thread started: {t.name}")
+        if i < len(threads) - 1:
+            time.sleep(5)   # stagger startup so threads don't hammer Binance simultaneously
 
     try:
         while True:
