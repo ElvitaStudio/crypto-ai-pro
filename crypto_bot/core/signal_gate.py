@@ -116,7 +116,7 @@ def _quality_score(signal: dict, trend_4h: str, rr: float) -> tuple[int, list[st
         score += 1
         details.append(f"+1 ADX {adx:.1f} ≥ {ADX_TREND_MIN} (trend confirmed)")
     else:
-        details.append(f"+0 ADX {adx:.1f if adx else '?'} < {ADX_TREND_MIN}")
+        details.append(f"+0 ADX {f'{adx:.1f}' if adx is not None else '?'} < {ADX_TREND_MIN}")
 
     # +1  RSI zone
     if rsi is not None:
@@ -136,7 +136,7 @@ def _quality_score(signal: dict, trend_4h: str, rr: float) -> tuple[int, list[st
         score += 1
         details.append(f"+1 Vol ratio {vol_ratio:.1f}× ≥ {VOL_RATIO_MIN}")
     else:
-        details.append(f"+0 Vol ratio {vol_ratio:.1f if vol_ratio else '?'}× < {VOL_RATIO_MIN}")
+        details.append(f"+0 Vol ratio {f'{vol_ratio:.1f}' if vol_ratio is not None else '?'}× < {VOL_RATIO_MIN}")
 
     # +1  Excellent R:R bonus
     if rr >= RR_BONUS_MIN:

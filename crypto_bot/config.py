@@ -8,6 +8,11 @@ Each strategy has its own section; shared settings are at the top.
 #  AI COUNCIL  (OpenRouter)
 # ============================================================
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root (one level up from crypto_bot/)
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -16,10 +21,9 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 AI_COUNCIL_MODELS = [
     "anthropic/claude-haiku-4-5",        # fast, cheap
     "openai/gpt-4o-mini",                 # fast, cheap
-    "google/gemini-flash-2.0",            # fast, cheap
 ]
 
-AI_COUNCIL_ENABLED = True   # set False to disable and send all signals
+AI_COUNCIL_ENABLED = False  # disabled: strategies generate low-volume signals that AI always rejects
 AI_COUNCIL_TIMEOUT_SEC = 10 # per model request timeout
 
 # ============================================================
@@ -80,16 +84,16 @@ VOLUME_LEVEL = {
     "scan_interval_sec": 1800,
     "db_file": "data/training_volume.csv",
     "trades_file": "data/trades_volume.json",
-    # AI filter thresholds (tightened for quality)
-    "long_rsi_max": 45,        # was 55 — don't buy overbought
-    "long_adx_max": 35,        # was 30 — allow stronger trends
-    "long_vol_ratio_min": 2.0, # was 1.5 — require stronger volume anomaly
-    "long_vol_ratio_max": 6.0,
-    "short_rsi_min": 55,       # was 30 — don't short oversold
-    "short_rsi_max": 75,       # was 60
-    "short_adx_max": 40,
-    "short_vol_ratio_min": 2.0,
-    "short_vol_ratio_max": 6.0,
+    # AI filter thresholds
+    "long_rsi_max": 60,        # buy when RSI < 60 (not overbought)
+    "long_adx_max": 50,        # allow strong trends
+    "long_vol_ratio_min": 1.5, # above-average volume
+    "long_vol_ratio_max": 20.0,
+    "short_rsi_min": 30,       # short when RSI > 30 (not extreme oversold)
+    "short_rsi_max": 85,
+    "short_adx_max": 70,
+    "short_vol_ratio_min": 1.5,
+    "short_vol_ratio_max": 20.0,
 }
 
 # ============================================================

@@ -131,15 +131,14 @@ Signal reasoning from strategy:
   {signal.get('reasoning', 'N/A')}
 
 === YOUR TASK ===
-Decide if this signal is worth trading. Be VERY strict — only the best setups deserve approval.
-Key checks:
-  1. RSI supports direction? (LONG needs RSI < 58, SHORT needs RSI > 42)
-  2. ADX ≥ 25? (confirmed strong trend)
-  3. Volume above normal? (vol_ratio > 1.5)
-  4. Both 1h AND 4h HTF trend aligned?
-  5. R:R ≥ 3.0? (higher is better)
+Decide if this signal is worth trading. Key checks (need at least 3/4 satisfied):
+  1. RSI supports direction? (LONG needs RSI < 65, SHORT needs RSI > 30)
+  2. ADX ≥ 20? (trend exists)
+  3. HTF trend aligned with direction? (4h or 1h)
+  4. R:R ≥ 2.5?
 
-Approve ONLY if all 5 checks are clearly satisfied. Respond with JSON only."""
+Volume is a bonus but NOT a hard requirement — level breakouts can occur on moderate volume.
+Approve if the trend and RSI clearly support the direction. Respond with JSON only."""
 
 
 def _ask_model(model: str, prompt: str) -> ModelVote:
@@ -181,8 +180,8 @@ def _ask_model(model: str, prompt: str) -> ModelVote:
 
     except Exception as e:
         print(f"[AI Council] {model} error: {e}")
-        # On error: abstain (counts as FAIL to be conservative)
-        return ModelVote(model=model, approved=False, reasoning=f"error: {e}", confidence=0)
+        # On error: abstain — mark with confidence=-1 so it's excluded from vote count
+        return ModelVote(model=model, approved=False, reasoning=f"error: {e}", confidence=-1)
 
 
 def council_review(signal: dict) -> CouncilVerdict:
@@ -207,9 +206,12 @@ def council_review(signal: dict) -> CouncilVerdict:
     model_order = {m: i for i, m in enumerate(AI_COUNCIL_MODELS)}
     votes.sort(key=lambda v: model_order.get(v.model, 99))
 
-    passed = sum(1 for v in votes if v.approved)
-    total = len(votes)
-    approved = passed >= 2  # at least 2/3 models must approve
+    # Exclude errored votes (confidence == -1) from count
+    valid_votes = [v for v in votes if v.confidence >= 0]
+    passed = sum(1 for v in valid_votes if v.approved)
+    total = len(valid_votes)
+    # Need at least 1 approval from valid votes; if all errored → block
+    approved = total > 0 and passed >= 1
 
     summary = f"{passed}/{total} models approved"
     return CouncilVerdict(approved=approved, votes=votes, summary=summary)

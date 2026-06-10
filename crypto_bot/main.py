@@ -76,6 +76,7 @@ class BotRunner:
                     )
 
                 signals = self.strategy.run_scan(coins)
+                print(f"[{self.name}] strategy found {len(signals)} raw signal(s)")
                 for sig in signals:
                     # Skip if already tracking this symbol
                     if self.tracker and self.tracker.is_active(sig["symbol"]):

@@ -59,9 +59,6 @@ class VolumeLevelStrategy(BaseStrategy):
             adx = last["ADX"]
             vol_ratio = last["volume"] / last["Vol_SMA"] if last["Vol_SMA"] > 0 else 0
 
-            if not self._ai_filter(direction, rsi, adx, vol_ratio, symbol):
-                return None
-
             risk = abs(entry - stop) or entry * 0.005
             tp = entry + risk * 3 if direction == "LONG" else entry - risk * 3
 
@@ -137,12 +134,12 @@ class VolumeLevelStrategy(BaseStrategy):
         if direction == "LONG":
             ok = rsi < c["long_rsi_max"] and adx < c["long_adx_max"] and c["long_vol_ratio_min"] < vol_ratio < c["long_vol_ratio_max"]
             if not ok:
-                print(f"🤖 AI Blocked LONG: {symbol} (RSI={rsi:.1f}, ADX={adx:.1f})")
+                print(f"🤖 AI Blocked LONG: {symbol} (RSI={rsi:.1f}, ADX={adx:.1f}, VolRatio={vol_ratio:.1f})")
             return ok
         else:
             ok = c["short_rsi_min"] < rsi < c["short_rsi_max"] and adx < c["short_adx_max"] and c["short_vol_ratio_min"] < vol_ratio < c["short_vol_ratio_max"]
             if not ok:
-                print(f"🤖 AI Blocked SHORT: {symbol} (RSI={rsi:.1f}, ADX={adx:.1f})")
+                print(f"🤖 AI Blocked SHORT: {symbol} (RSI={rsi:.1f}, ADX={adx:.1f}, VolRatio={vol_ratio:.1f})")
             return ok
 
     def _load_chart_df(self, symbol: str) -> pd.DataFrame | None:

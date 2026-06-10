@@ -90,8 +90,11 @@ def update_signal_result(symbol: str, strategy: str, status: str, pnl_pct: float
     with _conn() as con:
         con.execute(
             """UPDATE signals SET status=?, closed_at=?, pnl_pct=?
-               WHERE symbol=? AND strategy=? AND status='OPEN'
-               ORDER BY timestamp DESC LIMIT 1""",
+               WHERE id=(
+                 SELECT id FROM signals
+                 WHERE symbol=? AND strategy=? AND status='OPEN'
+                 ORDER BY timestamp DESC LIMIT 1
+               )""",
             (status, time.time(), pnl_pct, symbol, strategy),
         )
 
