@@ -155,10 +155,7 @@ function ScreenerRow({
         {/* Bottom: trend + buttons */}
         <div style={rowStyles.bottomRow}>
           <TrendBadge trend={item.trend1h} />
-          <div style={rowStyles.btns}>
-            <button style={rowStyles.btnChart}    onClick={onChart}>📈 График</button>
-            <button style={rowStyles.btnAnalysis} onClick={onAnalysis}>🔍 Анализ</button>
-          </div>
+          <button style={rowStyles.btnChart} onClick={onChart}>📈 График</button>
         </div>
       </div>
     </div>
