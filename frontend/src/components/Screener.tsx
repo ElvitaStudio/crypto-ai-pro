@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLang } from '../i18n/LangContext'
 import type { AccessStatus } from '../hooks/useAccess'
+import { CoinPicker } from './CoinPicker'
 
 const BASE_URL = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_URL ?? ''
 const REFRESH_INTERVAL_MS = 30_000
@@ -248,6 +249,8 @@ export function Screener({ accessStatus, onProClick, onOpenChart, onOpenAnalysis
   const isPro = accessStatus === 'active'
 
   const [tf, setTf]             = useState<typeof TIMEFRAMES[number]>('5м')
+  const [symbols, setSymbols]   = useState<string[]>(DEFAULT_SYMBOLS)
+  const [showPicker, setShowPicker] = useState(false)
   const [items, setItems]       = useState<ScreenerItem[]>([])
   const [loading, setLoading]   = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
@@ -256,7 +259,7 @@ export function Screener({ accessStatus, onProClick, onOpenChart, onOpenAnalysis
   const fetchData = useCallback(async (timeframe: string) => {
     try {
       const tf_api = TF_MAP[timeframe] ?? '5m'
-      const url = `${BASE_URL}/api/chart/screener/data?symbols=${DEFAULT_SYMBOLS.join(',')}&timeframe=${tf_api}`
+      const url = `${BASE_URL}/api/chart/screener/data?symbols=${symbols.join(',')}&timeframe=${tf_api}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: ScreenerItem[] = await res.json()
@@ -275,7 +278,7 @@ export function Screener({ accessStatus, onProClick, onOpenChart, onOpenAnalysis
     fetchData(tf)
     const id = setInterval(() => fetchData(tf), REFRESH_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [tf, fetchData])
+  }, [tf, symbols, fetchData])
 
   const timeStr = lastUpdate
     ? lastUpdate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -299,8 +302,12 @@ export function Screener({ accessStatus, onProClick, onOpenChart, onOpenAnalysis
         </div>
       </div>
 
-      {/* Timeframe selector */}
+      {/* Coins button + timeframe selector */}
       <div style={styles.tfRow}>
+        <button style={styles.coinsBtn} onClick={() => setShowPicker(true)}>
+          🪙 Монеты
+        </button>
+        <div style={styles.tfDivider} />
         {TIMEFRAMES.map(t => (
           <button
             key={t}
@@ -314,6 +321,16 @@ export function Screener({ accessStatus, onProClick, onOpenChart, onOpenAnalysis
       </div>
 
       {error && <div style={styles.errorBox}>⚠️ {error}</div>}
+
+      {showPicker && (
+        <CoinPicker
+          selected={symbols}
+          onClose={() => setShowPicker(false)}
+          onApply={newSymbols => {
+            if (newSymbols.length > 0) setSymbols(newSymbols)
+          }}
+        />
+      )}
 
       {/* Rows */}
       <div>
@@ -344,7 +361,13 @@ const styles: Record<string, React.CSSProperties> = {
   langSwitch: { display: 'flex', background: 'rgba(255,255,255,0.07)', borderRadius: 8, padding: 2, gap: 2 },
   langBtn:    { padding: '3px 8px', borderRadius: 6, border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 700, cursor: 'pointer' },
   langActive: { background: 'rgba(255,255,255,0.15)', color: '#fff' },
-  tfRow: { display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 },
+  tfRow: { display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10, flexWrap: 'wrap' as const },
+  coinsBtn: {
+    padding: '4px 12px', borderRadius: 6,
+    background: 'rgba(240,165,0,0.15)', border: '1px solid rgba(240,165,0,0.4)',
+    color: '#f0a500', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+  },
+  tfDivider: { width: 1, height: 18, background: '#30363d', margin: '0 2px' },
   tfBtn: {
     padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
     background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 12,

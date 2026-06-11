@@ -317,6 +317,51 @@ def _screener_item(args: tuple) -> ScreenerItem | None:
         return None
 
 
+class CoinListItem(BaseModel):
+    symbol: str
+    price: float
+    change24h: float
+    volume24h: float   # millions
+    volatility24h: float  # (high-low)/open * 100
+
+
+@router.get("/coins/list", response_model=list[CoinListItem])
+def get_coins_list(limit: int = Query(80, le=200)):
+    """Return top coins sorted by 24h volume with basic stats for the coin picker."""
+    import concurrent.futures
+
+    try:
+        tickers = _exchange.fetch_tickers()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to fetch tickers: {e}")
+
+    # Filter USDT perpetual futures, sort by quoteVolume
+    items = []
+    for sym, t in tickers.items():
+        if not sym.endswith("/USDT") and not sym.endswith("/USDT:USDT"):
+            continue
+        qv = t.get("quoteVolume") or 0
+        if qv < 1_000_000:   # skip micro-cap
+            continue
+        base = sym.split("/")[0]
+        price     = float(t.get("last") or 0)
+        change24h = float(t.get("percentage") or 0)
+        hi        = float(t.get("high") or price)
+        lo        = float(t.get("low") or price)
+        op        = float(t.get("open") or price)
+        volatility = abs(hi - lo) / (op + 1e-10) * 100
+        items.append(CoinListItem(
+            symbol=base,
+            price=round(price, 8),
+            change24h=round(change24h, 2),
+            volume24h=round(qv / 1_000_000, 1),
+            volatility24h=round(volatility, 2),
+        ))
+
+    items.sort(key=lambda x: x.volume24h, reverse=True)
+    return items[:limit]
+
+
 @router.get("/screener/data", response_model=list[ScreenerItem])
 def get_screener(
     symbols: str = Query(
