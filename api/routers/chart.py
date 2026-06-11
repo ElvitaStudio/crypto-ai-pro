@@ -384,6 +384,143 @@ def get_screener(
     return [r for r in results if r is not None]
 
 
+# ── AI Analysis endpoint ─────────────────────────────────────────────────────
+# NOTE: must be BEFORE /{symbol} to avoid "ai-analysis" matching as symbol param
+
+class AIAnalysisResponse(BaseModel):
+    symbol: str
+    report: str
+    indicators: dict
+
+
+def _calc_rsi_simple(close: pd.Series, length: int = 14) -> float:
+    delta = close.diff()
+    gain  = delta.clip(lower=0).ewm(com=length - 1, min_periods=length).mean()
+    loss  = (-delta).clip(lower=0).ewm(com=length - 1, min_periods=length).mean()
+    rs    = gain / (loss + 1e-10)
+    return float(100 - 100 / (1 + rs.iloc[-1]))
+
+
+def _calc_adx_simple(df: pd.DataFrame, length: int = 14) -> float:
+    hi, lo, cl = df["high"], df["low"], df["close"]
+    tr = pd.concat([hi - lo, (hi - cl.shift()).abs(), (lo - cl.shift()).abs()], axis=1).max(axis=1)
+    dm_p = hi.diff().clip(lower=0).where(hi.diff() > (-lo.diff()).clip(lower=0), 0)
+    dm_n = (-lo.diff()).clip(lower=0).where((-lo.diff()).clip(lower=0) > hi.diff().clip(lower=0), 0)
+    atr   = tr.ewm(com=length - 1, min_periods=length).mean()
+    di_p  = 100 * dm_p.ewm(com=length - 1, min_periods=length).mean() / (atr + 1e-10)
+    di_n  = 100 * dm_n.ewm(com=length - 1, min_periods=length).mean() / (atr + 1e-10)
+    dx    = 100 * (di_p - di_n).abs() / (di_p + di_n + 1e-10)
+    return float(dx.ewm(com=length - 1, min_periods=length).mean().iloc[-1])
+
+
+@router.get("/ai-analysis/{symbol}", response_model=AIAnalysisResponse)
+def get_ai_analysis(symbol: str, timeframe: str = Query("15m")):
+    """Fetch OHLCV + indicators and generate a detailed AI analysis report."""
+    ccxt_sym = symbol.upper()
+    if "/" not in ccxt_sym:
+        ccxt_sym = f"{ccxt_sym}/USDT"
+
+    try:
+        df_15m = _fetch_ohlcv(ccxt_sym, "15m", 100)
+        df_1h  = _fetch_ohlcv(ccxt_sym, "1h",  60)
+        df_4h  = _fetch_ohlcv(ccxt_sym, "4h",  60)
+        ticker = _exchange.fetch_ticker(ccxt_sym)
+    except Exception as e:
+        raise HTTPException(400, f"Failed to fetch data for {symbol}: {e}")
+
+    rsi_15m = round(_calc_rsi_simple(df_15m["close"]), 1)
+    rsi_1h  = round(_calc_rsi_simple(df_1h["close"]),  1)
+    adx_15m = round(_calc_adx_simple(df_15m), 1)
+
+    body_ratio = ((df_15m["close"] - df_15m["open"]) / (df_15m["high"] - df_15m["low"] + 1e-10)).clip(-1, 1)
+    buy_vol    = df_15m["volume"] * (0.5 + body_ratio * 0.5).clip(0.05, 0.95)
+    cvd        = (buy_vol - (df_15m["volume"] - buy_vol)).cumsum()
+    cvd_slope  = float(cvd.iloc[-1] - cvd.iloc[-10])
+    cvd_trend  = "растёт" if cvd_slope > 0 else "падает"
+
+    tp         = (df_15m["high"] + df_15m["low"] + df_15m["close"]) / 3
+    vwap       = float((tp * df_15m["volume"]).cumsum().iloc[-1] / df_15m["volume"].cumsum().iloc[-1])
+    price      = float(ticker["last"])
+    vwap_dist  = round((price - vwap) / vwap * 100, 2)
+
+    ema50_1h = float(df_1h["close"].ewm(span=50).mean().iloc[-1])
+    ema50_4h = float(df_4h["close"].ewm(span=50).mean().iloc[-1])
+    trend_1h = "UP" if float(df_1h["close"].iloc[-1]) > ema50_1h * 1.002 else "DOWN" if float(df_1h["close"].iloc[-1]) < ema50_1h * 0.998 else "NEUTRAL"
+    trend_4h = "UP" if float(df_4h["close"].iloc[-1]) > ema50_4h * 1.002 else "DOWN" if float(df_4h["close"].iloc[-1]) < ema50_4h * 0.998 else "NEUTRAL"
+
+    vol_ratio  = round(float(df_15m["volume"].iloc[-1]) / (float(df_15m["volume"].iloc[-20:].mean()) + 1e-10), 2)
+    change24h  = round(float(ticker.get("percentage") or 0), 2)
+    high24h    = float(ticker.get("high") or price)
+    low24h     = float(ticker.get("low") or price)
+
+    indicators = {
+        "price": price, "change24h": change24h,
+        "high24h": high24h, "low24h": low24h,
+        "rsi_15m": rsi_15m, "rsi_1h": rsi_1h,
+        "adx": adx_15m, "vwap": round(vwap, 6),
+        "vwap_dist_pct": vwap_dist,
+        "cvd_trend": cvd_trend, "vol_ratio": vol_ratio,
+        "trend_1h": trend_1h, "trend_4h": trend_4h,
+    }
+
+    prompt = f"""Ты — старший трейдер с 15-летним опытом в криптовалютных фьючерсах.
+Проведи полный технический анализ монеты {ccxt_sym} и дай чёткий торговый план.
+
+ДАННЫЕ:
+- Цена: ${price:,.4f} | Изменение 24ч: {change24h:+.2f}%
+- Диапазон 24ч: ${low24h:,.4f} – ${high24h:,.4f}
+- RSI (15м): {rsi_15m} | RSI (1ч): {rsi_1h}
+- ADX (15м): {adx_15m}
+- VWAP: ${vwap:,.4f} | Цена от VWAP: {vwap_dist:+.2f}%
+- CVD: {cvd_trend} | Объём (×норм): {vol_ratio}×
+- Тренд 1ч: {trend_1h} | Тренд 4ч: {trend_4h}
+
+СТРУКТУРА ОТЧЁТА:
+
+## 🎯 Общая картина
+Кратко: бычий/медвежий/нейтральный и почему.
+
+## 📊 Разбор индикаторов
+- RSI, ADX, CVD, VWAP, Объём
+
+## ⚡ Торговый сигнал
+**Направление:** LONG / SHORT / ЖДАТЬ
+**Вход:** цена
+**Стоп-лосс:** уровень
+**Тейк-профит:** TP1, TP2
+**R:R:** расчёт
+
+## ⚠️ Риски
+Что может сломать сценарий.
+
+## 🏆 Вывод
+Одно предложение — что делать прямо сейчас.
+
+Пиши на русском. Конкретно, без воды. Максимум 400 слов."""
+
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        return AIAnalysisResponse(symbol=ccxt_sym, report="⚠️ OPENROUTER_API_KEY не настроен.", indicators=indicators)
+
+    try:
+        resp = httpx.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "anthropic/claude-haiku-4-5",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1200, "temperature": 0.3,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        report = resp.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        report = f"⚠️ Ошибка AI: {e}"
+
+    return AIAnalysisResponse(symbol=ccxt_sym, report=report, indicators=indicators)
+
+
 # ── Chart endpoint ────────────────────────────────────────────────────────────
 
 @router.get("/{symbol}", response_model=ChartData)
@@ -452,161 +589,4 @@ def get_chart(
         val=val,
     )
 
-
-# ── AI Analysis endpoint ──────────────────────────────────────────────────────
-
-class AIAnalysisResponse(BaseModel):
-    symbol: str
-    report: str
-    indicators: dict
-
-
-def _calc_rsi_simple(close: pd.Series, length: int = 14) -> float:
-    delta = close.diff()
-    gain  = delta.clip(lower=0).ewm(com=length - 1, min_periods=length).mean()
-    loss  = (-delta).clip(lower=0).ewm(com=length - 1, min_periods=length).mean()
-    rs    = gain / (loss + 1e-10)
-    return float(100 - 100 / (1 + rs.iloc[-1]))
-
-
-def _calc_adx_simple(df: pd.DataFrame, length: int = 14) -> float:
-    hi, lo, cl = df["high"], df["low"], df["close"]
-    tr = pd.concat([hi - lo, (hi - cl.shift()).abs(), (lo - cl.shift()).abs()], axis=1).max(axis=1)
-    dm_p = hi.diff().clip(lower=0).where(hi.diff() > (-lo.diff()).clip(lower=0), 0)
-    dm_n = (-lo.diff()).clip(lower=0).where((-lo.diff()).clip(lower=0) > hi.diff().clip(lower=0), 0)
-    atr   = tr.ewm(com=length - 1, min_periods=length).mean()
-    di_p  = 100 * dm_p.ewm(com=length - 1, min_periods=length).mean() / (atr + 1e-10)
-    di_n  = 100 * dm_n.ewm(com=length - 1, min_periods=length).mean() / (atr + 1e-10)
-    dx    = 100 * (di_p - di_n).abs() / (di_p + di_n + 1e-10)
-    return float(dx.ewm(com=length - 1, min_periods=length).mean().iloc[-1])
-
-
-@router.get("/ai-analysis/{symbol}", response_model=AIAnalysisResponse)
-def get_ai_analysis(symbol: str, timeframe: str = Query("15m")):
-    """
-    Fetch OHLCV + indicators for a symbol and generate a detailed AI analysis report.
-    """
-    ccxt_sym = symbol.upper()
-    if "/" not in ccxt_sym:
-        ccxt_sym = f"{ccxt_sym}/USDT"
-
-    try:
-        df_15m = _fetch_ohlcv(ccxt_sym, "15m", 100)
-        df_1h  = _fetch_ohlcv(ccxt_sym, "1h",  60)
-        df_4h  = _fetch_ohlcv(ccxt_sym, "4h",  60)
-        ticker = _exchange.fetch_ticker(ccxt_sym)
-    except Exception as e:
-        raise HTTPException(400, f"Failed to fetch data for {symbol}: {e}")
-
-    # ── Indicators ────────────────────────────────────────────────────────────
-    rsi_15m = round(_calc_rsi_simple(df_15m["close"]), 1)
-    rsi_1h  = round(_calc_rsi_simple(df_1h["close"]),  1)
-    adx_15m = round(_calc_adx_simple(df_15m), 1)
-
-    # CVD
-    body_ratio = ((df_15m["close"] - df_15m["open"]) / (df_15m["high"] - df_15m["low"] + 1e-10)).clip(-1, 1)
-    buy_vol = df_15m["volume"] * (0.5 + body_ratio * 0.5).clip(0.05, 0.95)
-    cvd     = (buy_vol - (df_15m["volume"] - buy_vol)).cumsum()
-    cvd_val   = float(cvd.iloc[-1])
-    cvd_slope = float(cvd.iloc[-1] - cvd.iloc[-10])
-    cvd_trend = "растёт" if cvd_slope > 0 else "падает"
-
-    # VWAP
-    tp      = (df_15m["high"] + df_15m["low"] + df_15m["close"]) / 3
-    vwap    = float((tp * df_15m["volume"]).cumsum().iloc[-1] / df_15m["volume"].cumsum().iloc[-1])
-    price   = float(ticker["last"])
-    vwap_dist = round((price - vwap) / vwap * 100, 2)
-
-    # EMA trend 1h, 4h
-    ema50_1h = float(df_1h["close"].ewm(span=50).mean().iloc[-1])
-    ema50_4h = float(df_4h["close"].ewm(span=50).mean().iloc[-1])
-    price_1h = float(df_1h["close"].iloc[-1])
-    price_4h = float(df_4h["close"].iloc[-1])
-    trend_1h = "UP" if price_1h > ema50_1h * 1.002 else "DOWN" if price_1h < ema50_1h * 0.998 else "NEUTRAL"
-    trend_4h = "UP" if price_4h > ema50_4h * 1.002 else "DOWN" if price_4h < ema50_4h * 0.998 else "NEUTRAL"
-
-    # Volume ratio
-    vol_sma   = float(df_15m["volume"].iloc[-20:].mean())
-    vol_ratio = round(float(df_15m["volume"].iloc[-1]) / (vol_sma + 1e-10), 2)
-
-    change24h = round(float(ticker.get("percentage") or 0), 2)
-    high24h   = float(ticker.get("high") or price)
-    low24h    = float(ticker.get("low") or price)
-
-    indicators = {
-        "price": price, "change24h": change24h,
-        "high24h": high24h, "low24h": low24h,
-        "rsi_15m": rsi_15m, "rsi_1h": rsi_1h,
-        "adx": adx_15m, "vwap": round(vwap, 6),
-        "vwap_dist_pct": vwap_dist,
-        "cvd_trend": cvd_trend, "vol_ratio": vol_ratio,
-        "trend_1h": trend_1h, "trend_4h": trend_4h,
-    }
-
-    # ── Build AI prompt ───────────────────────────────────────────────────────
-    prompt = f"""Ты — старший трейдер с 15-летним опытом в криптовалютных фьючерсах.
-Проведи полный технический анализ монеты {ccxt_sym} и дай чёткий торговый план.
-
-ДАННЫЕ ДЛЯ АНАЛИЗА:
-- Цена: ${price:,.4f} | Изменение 24ч: {change24h:+.2f}%
-- Диапазон 24ч: ${low24h:,.4f} – ${high24h:,.4f}
-- RSI (15м): {rsi_15m} | RSI (1ч): {rsi_1h}
-- ADX (15м): {adx_15m} (сила тренда)
-- VWAP: ${vwap:,.4f} | Цена от VWAP: {vwap_dist:+.2f}%
-- CVD: {cvd_trend} (покупательский поток {'+' if cvd_slope > 0 else '-'})
-- Объём (×норм): {vol_ratio}×
-- Тренд 1ч: {trend_1h} | Тренд 4ч: {trend_4h}
-
-СТРУКТУРА ОТЧЁТА (строго соблюдай):
-
-## 🎯 Общая картина
-Кратко: бычий/медвежий/нейтральный рынок и почему.
-
-## 📊 Разбор индикаторов
-- RSI: что говорит (зона перекупленности/перепроданности/нейтраль)
-- ADX: сила тренда
-- CVD: что происходит с потоком денег
-- VWAP: где цена относительно справедливой стоимости
-- Объём: активность
-
-## ⚡ Торговый сигнал
-**Направление:** LONG / SHORT / ЖДАТЬ
-**Условие входа:** конкретная цена или условие
-**Стоп-лосс:** уровень и обоснование
-**Тейк-профит:** уровни TP1, TP2
-**R:R соотношение:** расчёт
-
-## ⚠️ Риски и что следить
-Ключевые уровни и события которые могут сломать сценарий.
-
-## 🏆 Вывод
-Одно предложение: что делать прямо сейчас.
-
-Пиши на русском. Конкретно, без воды. Максимум 400 слов."""
-
-    # ── Call OpenRouter ───────────────────────────────────────────────────────
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key:
-        return AIAnalysisResponse(
-            symbol=ccxt_sym, report="⚠️ OPENROUTER_API_KEY не настроен.", indicators=indicators
-        )
-
-    try:
-        resp = httpx.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model":       "anthropic/claude-haiku-4-5",
-                "messages":    [{"role": "user", "content": prompt}],
-                "max_tokens":  1200,
-                "temperature": 0.3,
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        report = resp.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        report = f"⚠️ Ошибка AI: {e}"
-
-    return AIAnalysisResponse(symbol=ccxt_sym, report=report, indicators=indicators)
 
