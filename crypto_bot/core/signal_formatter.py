@@ -81,6 +81,8 @@ def format_signal(signal: dict) -> str:
     entry     = signal["entry"]
     sl        = signal["sl"]
     tp        = signal["tp"]
+    tp1       = signal.get("tp1")
+    liq_grab  = signal.get("liq_grab", False)
 
     dir_icon  = "🟢 LONG" if direction == "LONG" else "🔴 SHORT"
     risk_pct  = _pct(entry, sl)
@@ -116,13 +118,27 @@ def format_signal(signal: dict) -> str:
     # ── Timestamp ─────────────────────────────────────────────────────────────
     ts = datetime.now(timezone.utc).strftime("%H:%M UTC")
 
+    # Liquidity grab badge
+    grab_badge = "  🎣 _ликвидность снята_" if liq_grab else ""
+
+    # TP lines: dual TP if tp1 is present
+    if tp1 is not None:
+        tp1_pct = _pct(entry, tp1)
+        tp2_pct = rwd_pct
+        tp_lines = [
+            f"🟡 *TP1:*   `{_fmt_price(tp1)}`  (+{tp1_pct})  ← 50% позиции",
+            f"💰 *TP2:*   `{_fmt_price(tp)}`   (+{tp2_pct})  ← безубыток",
+        ]
+    else:
+        tp_lines = [f"💰 *Тейк:*  `{_fmt_price(tp)}`  (+{rwd_pct})"]
+
     lines = [
         f"{meta['icon']} *{meta['label']}* | `{symbol}`",
-        f"{dir_icon}  ·  {ts}",
+        f"{dir_icon}  ·  {ts}{grab_badge}",
         "",
         f"🎯 *Вход:*  `{_fmt_price(entry)}`",
         f"🛑 *Стоп:*  `{_fmt_price(sl)}`  (-{risk_pct})",
-        f"💰 *Тейк:*  `{_fmt_price(tp)}`  (+{rwd_pct})",
+        *tp_lines,
         f"📐 *R:R:*   {rr}",
         "",
         f"📈 {indicators}",
