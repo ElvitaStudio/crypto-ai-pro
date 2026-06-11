@@ -324,11 +324,7 @@ export function Screener({ accessStatus, onProClick, onOpenChart, onOpenAnalysis
 
       {showPicker && (
         <CoinPicker
-          selected={symbols}
           onClose={() => setShowPicker(false)}
-          onApply={newSymbols => {
-            if (newSymbols.length > 0) setSymbols(newSymbols)
-          }}
         />
       )}
 
