@@ -229,17 +229,25 @@ def _zone_from_group(group: list[VolumeProfileBar]) -> Zone:
 # ── Screener endpoint ─────────────────────────────────────────────────────────
 # NOTE: must be registered BEFORE /{symbol} to avoid "screener" matching as symbol
 
+class ScreenerCandle(BaseModel):
+    o: float
+    h: float
+    l: float
+    c: float
+    v: float
+
 class ScreenerItem(BaseModel):
     symbol: str
     price: float
     change24h: float        # percent
     high24h: float
     low24h: float
-    volume24h: float
+    volume24h: float        # millions
     rsi: float | None
     adx: float | None
     vol_ratio: float | None
     trend1h: str            # UP / DOWN / NEUTRAL
+    candles: list[ScreenerCandle] = []   # last N candles for mini chart
 
 
 DEFAULT_SCREENER_SYMBOLS = [
@@ -248,7 +256,8 @@ DEFAULT_SCREENER_SYMBOLS = [
 ]
 
 
-def _screener_item(ccxt_sym: str) -> ScreenerItem | None:
+def _screener_item(args: tuple) -> ScreenerItem | None:
+    ccxt_sym, timeframe = args
     try:
         ticker = _exchange.fetch_ticker(ccxt_sym)
         price      = float(ticker["last"] or 0)
@@ -257,6 +266,15 @@ def _screener_item(ccxt_sym: str) -> ScreenerItem | None:
         low24h     = float(ticker["low"] or price)
         volume24h  = float(ticker["quoteVolume"] or 0)
 
+        # Candles for mini chart (use requested timeframe)
+        df_chart = _fetch_ohlcv(ccxt_sym, timeframe, 60)
+        mini_candles = [
+            ScreenerCandle(o=row["open"], h=row["high"], l=row["low"],
+                           c=row["close"], v=row["volume"])
+            for _, row in df_chart.tail(50).iterrows()
+        ]
+
+        # Indicators always on 1h for consistency
         df = _fetch_ohlcv(ccxt_sym, "1h", 60)
 
         import pandas_ta as pta
@@ -293,6 +311,7 @@ def _screener_item(ccxt_sym: str) -> ScreenerItem | None:
             adx=adx_val,
             vol_ratio=vol_ratio,
             trend1h=trend1h,
+            candles=mini_candles,
         )
     except Exception:
         return None
@@ -304,14 +323,15 @@ def get_screener(
         ",".join(s.replace("/USDT", "") for s in DEFAULT_SCREENER_SYMBOLS),
         description="Comma-separated base tickers, e.g. BTC,ETH,SOL",
     ),
+    timeframe: str = Query("5m", description="Candle timeframe for mini chart"),
 ):
-    """Return market snapshot for multiple symbols (price, RSI, ADX, trend)."""
+    """Return market snapshot for multiple symbols (price, RSI, ADX, trend, candles)."""
     import concurrent.futures
     tickers = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    ccxt_symbols = [f"{t}/USDT" for t in tickers]
+    args = [(f"{t}/USDT", timeframe) for t in tickers]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=7) as pool:
-        results = list(pool.map(_screener_item, ccxt_symbols))
+        results = list(pool.map(_screener_item, args))
 
     return [r for r in results if r is not None]
 
