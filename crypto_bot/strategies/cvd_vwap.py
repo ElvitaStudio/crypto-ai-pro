@@ -194,9 +194,14 @@ def generate_signal(
 
     price_to_vwap_pct = abs(last_close - last_vwap) / last_vwap
 
-    # CVD slope: last 3 candles
+    # CVD slope: last 3 candles (short-term momentum)
     cvd_slope = float(cvd_15.iloc[-1]) - float(cvd_15.iloc[-4])
-    cvd_slope_norm = cvd_slope / (df_15m["volume"].iloc[-20:].mean() + 1e-10)
+    vol_mean   = df_15m["volume"].iloc[-20:].mean() + 1e-10
+    cvd_slope_norm = cvd_slope / vol_mean
+
+    # CVD macro trend: last 20 candles — prevents SHORT when CVD is rising overall
+    cvd_macro = float(cvd_15.iloc[-1]) - float(cvd_15.iloc[-20])
+    cvd_macro_norm = cvd_macro / vol_mean
 
     # Divergence
     divergence = _detect_divergence(df_15m, cvd_15)
@@ -209,25 +214,27 @@ def generate_signal(
     reasoning = ""
 
     # ── LONG conditions ───────────────────────────────────────────────────────
-    # Note: 1h trend is NOT a hard block here — Gate scores it as quality factor.
-    # CvdVwap is a mean-reversion strategy: price overshoots VWAP then returns.
     long_at_vwap = last_close <= last_vwap * (1 + VWAP_ZONE_PCT)
-    long_cvd_up  = cvd_slope_norm > 0
+    long_cvd_up  = cvd_slope_norm > 0          # short-term CVD rising
     long_div     = divergence == "BULLISH"
     long_rsi     = rsi < RSI_LONG_MAX
+    # Macro CVD must NOT be strongly falling (no buying into a CVD collapse)
+    long_cvd_ok  = cvd_macro_norm > -2.0
 
-    if long_at_vwap and long_cvd_up and long_div and long_rsi:
+    if long_at_vwap and long_cvd_up and long_div and long_rsi and long_cvd_ok:
         direction = "LONG"
         reasoning = (f"VWAP bounce LONG. CVD bullish divergence. "
                      f"RSI={rsi:.1f}, ADX={adx:.1f}, 1h={trend_1h}")
 
     # ── SHORT conditions ──────────────────────────────────────────────────────
     short_at_vwap  = last_close >= last_vwap * (1 - VWAP_ZONE_PCT)
-    short_cvd_down = cvd_slope_norm < 0
+    short_cvd_down = cvd_slope_norm < 0        # short-term CVD falling
     short_div      = divergence == "BEARISH"
     short_rsi      = rsi > RSI_SHORT_MIN
+    # CRITICAL: macro CVD must be falling — no SHORT when overall buyers dominate
+    short_cvd_ok   = cvd_macro_norm < 2.0
 
-    if short_at_vwap and short_cvd_down and short_div and short_rsi:
+    if short_at_vwap and short_cvd_down and short_div and short_rsi and short_cvd_ok:
         direction = "SHORT"
         reasoning = (f"VWAP bounce SHORT. CVD bearish divergence. "
                      f"RSI={rsi:.1f}, ADX={adx:.1f}, 1h={trend_1h}")
